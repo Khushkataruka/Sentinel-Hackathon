@@ -1,0 +1,13 @@
+# The Gujarat Police Sentinel sandbox grid.
+#
+# Reads the catalogue at {base_url}/api/ingest and uses the stream URLs it
+# returns. Camera ids and the camera set change, so nothing here hardcodes an
+# endpoint -- the catalogue is the contract, the URL pattern is not.
+#
+# base_url falls back to SENTINEL_SENTINEL_BASE_URL when omitted.
+
+name   = "sentinel-grid"
+driver = "sentinel.ingest.adapters.builtin.sentinel_grid"
+
+# base_url = "http://<host>"
+timeout_s = 15.0

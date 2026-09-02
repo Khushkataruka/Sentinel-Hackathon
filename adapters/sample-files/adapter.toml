@@ -1,0 +1,11 @@
+# Local video files, for developing with no sandbox and no network.
+#
+# Also the honest way to exercise the loop-point discontinuity handling: a
+# looping file produces the same hard scene cut the live grid does.
+#
+# Drop .mp4 files into var/samples/ and they are picked up by stem name.
+
+name    = "sample-files"
+driver  = "sentinel.ingest.adapters.builtin.filesrc"
+root    = "./var/samples"
+pattern = "*.mp4"

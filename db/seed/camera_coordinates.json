@@ -1,0 +1,290 @@
+{
+  "source": "cameragrid.html COORDS table, 2026-08-24 snapshot",
+  "warning": "quality is one of ok|approx|guess. The /api/ingest catalogue carries no coordinates at all; these were placed by hand.",
+  "cameras": [
+    {
+      "id": "1",
+      "location": "01 Chiman bhai Bridge",
+      "lat": 23.0125,
+      "lon": 72.568,
+      "quality": "approx",
+      "note": "01 Chimanbhai Bridge, Ahmedabad"
+    },
+    {
+      "id": "2",
+      "location": "02 Janpath",
+      "lat": 23.0369,
+      "lon": 72.5296,
+      "quality": "guess",
+      "note": "02 Janpath"
+    },
+    {
+      "id": "3",
+      "location": "03 O.N.G.C. Office",
+      "lat": 23.1023,
+      "lon": 72.5935,
+      "quality": "approx",
+      "note": "03 ONGC Office, Chandkheda"
+    },
+    {
+      "id": "4",
+      "location": "04 Paldi Circle",
+      "lat": 23.013,
+      "lon": 72.562,
+      "quality": "ok",
+      "note": "04 Paldi Circle, Ahmedabad"
+    },
+    {
+      "id": "5",
+      "location": "05 Visat teen Rasta",
+      "lat": 23.0997,
+      "lon": 72.5877,
+      "quality": "ok",
+      "note": "05 Visat Teen Rasta"
+    },
+    {
+      "id": "6",
+      "location": "06 Timbavadi gate-Junagadh",
+      "codec": "hevc",
+      "width": 1920,
+      "height": 1080,
+      "fps": 25,
+      "bitrate_kbps": 1923,
+      "lat": 21.488,
+      "lon": 70.468,
+      "quality": "approx",
+      "note": "06 Timbavadi Gate, Junagadh"
+    },
+    {
+      "id": "7",
+      "location": "07 hero-showroom-gir-somnath",
+      "lat": 20.9159,
+      "lon": 70.3629,
+      "quality": "guess",
+      "note": "07 Hero showroom, Gir Somnath"
+    },
+    {
+      "id": "8",
+      "location": "08 majewadi-gate-junagadh",
+      "lat": 21.523,
+      "lon": 70.462,
+      "quality": "approx",
+      "note": "08 Majewadi Gate, Junagadh"
+    },
+    {
+      "id": "9",
+      "location": "09 new-bypass-near-by-circle-junagadh-2",
+      "lat": 21.505,
+      "lon": 70.44,
+      "quality": "approx",
+      "note": "09 New bypass circle, Junagadh"
+    },
+    {
+      "id": "10",
+      "location": "10 char-chowk-road-2-junagadh",
+      "lat": 21.518,
+      "lon": 70.459,
+      "quality": "approx",
+      "note": "10 Char Chowk Road, Junagadh"
+    },
+    {
+      "id": "11",
+      "location": "11 dolatpara-junagadh",
+      "lat": 21.483,
+      "lon": 70.456,
+      "quality": "approx",
+      "note": "11 Dolatpara, Junagadh"
+    },
+    {
+      "id": "12",
+      "location": "12 Tri Mandir Adalaj Tollnaka",
+      "lat": 23.1665,
+      "lon": 72.5735,
+      "quality": "ok",
+      "note": "12 Trimandir Adalaj toll naka"
+    },
+    {
+      "id": "13",
+      "location": "13 CN Vidhyalaya",
+      "codec": "h264",
+      "width": 1920,
+      "height": 1080,
+      "fps": 25,
+      "bitrate_kbps": 0,
+      "lat": 23.023,
+      "lon": 72.556,
+      "quality": "ok",
+      "note": "13 C.N. Vidyalaya, Ambawadi"
+    },
+    {
+      "id": "14",
+      "location": "14 Delight",
+      "codec": "h264",
+      "width": 1920,
+      "height": 1080,
+      "fps": 25,
+      "bitrate_kbps": 0,
+      "lat": 23.05,
+      "lon": 72.56,
+      "quality": "guess",
+      "note": "14 Delight"
+    },
+    {
+      "id": "15",
+      "location": "15 Suvidha park",
+      "codec": "h264",
+      "width": 1920,
+      "height": 1080,
+      "fps": 25,
+      "bitrate_kbps": 0,
+      "lat": 23.014,
+      "lon": 72.554,
+      "quality": "guess",
+      "note": "15 Suvidha Park"
+    },
+    {
+      "id": "16",
+      "location": "16 Visat P2",
+      "codec": "h264",
+      "width": 1920,
+      "height": 1080,
+      "fps": 25,
+      "bitrate_kbps": 0,
+      "lat": 23.101,
+      "lon": 72.586,
+      "quality": "approx",
+      "note": "16 Visat P2"
+    },
+    {
+      "id": "17",
+      "location": "17 Rajkot Bus Port CCTV",
+      "codec": "hevc",
+      "width": 1920,
+      "height": 1080,
+      "fps": 25,
+      "bitrate_kbps": 0,
+      "lat": 22.2967,
+      "lon": 70.794,
+      "quality": "ok",
+      "note": "17 Rajkot Bus Port"
+    },
+    {
+      "id": "18",
+      "location": "18 Rajkot CCTV",
+      "lat": 22.3039,
+      "lon": 70.8022,
+      "quality": "approx",
+      "note": "18 Rajkot"
+    },
+    {
+      "id": "19",
+      "location": "19 KHAPARIA GRAM PANCHAYAT, TALUKA GANDEVI, DISTRICT NAVSARI",
+      "lat": 20.8167,
+      "lon": 72.9833,
+      "quality": "approx",
+      "note": "19 Khapariya, Gandevi, Navsari"
+    },
+    {
+      "id": "20",
+      "location": "20 Mohanpura",
+      "lat": 23.2,
+      "lon": 72.63,
+      "quality": "guess",
+      "note": "20 Mohanpura"
+    },
+    {
+      "id": "21",
+      "location": "23 Patan Dethali Char Rasta",
+      "lat": 23.825,
+      "lon": 72.14,
+      "quality": "guess",
+      "note": "23 Patan Dethali Char Rasta"
+    },
+    {
+      "id": "22",
+      "location": "28 BK Mervada tran Rasta",
+      "codec": "hevc",
+      "width": 1920,
+      "height": 1080,
+      "lat": 24.26,
+      "lon": 72.19,
+      "quality": "guess",
+      "note": "28 BK (Banaskantha) Mervada Tran Rasta"
+    },
+    {
+      "id": "23",
+      "location": "30 kheram",
+      "codec": "h264",
+      "width": 1280,
+      "height": 720,
+      "lat": 22.4,
+      "lon": 72.9,
+      "quality": "guess",
+      "note": "30 Kheram"
+    },
+    {
+      "id": "24",
+      "location": "33 dehgam",
+      "lat": 23.17,
+      "lon": 72.82,
+      "quality": "ok",
+      "note": "33 Dehgam"
+    },
+    {
+      "id": "25",
+      "location": "34 dhanori",
+      "lat": 24.04,
+      "lon": 72.55,
+      "quality": "guess",
+      "note": "34 Dhanori"
+    },
+    {
+      "id": "26",
+      "location": "35 TANKAL",
+      "codec": "hevc",
+      "width": 2560,
+      "height": 1440,
+      "lat": 23.55,
+      "lon": 72.95,
+      "quality": "guess",
+      "note": "35 Tankal"
+    },
+    {
+      "id": "27",
+      "location": "36 bilimora",
+      "codec": "h264",
+      "width": 1280,
+      "height": 960,
+      "lat": 20.769,
+      "lon": 72.956,
+      "quality": "approx",
+      "note": "36 Bilimora"
+    },
+    {
+      "id": "28",
+      "location": "37 bilimora",
+      "lat": 20.772,
+      "lon": 72.96,
+      "quality": "approx",
+      "note": "37 Bilimora"
+    },
+    {
+      "id": "29",
+      "location": "38 bilimora",
+      "codec": "h264",
+      "width": 1280,
+      "height": 960,
+      "lat": 20.766,
+      "lon": 72.952,
+      "quality": "approx",
+      "note": "38 Bilimora"
+    },
+    {
+      "id": "30",
+      "location": "Gandhidham Rambaugh p2",
+      "lat": null,
+      "lon": null,
+      "quality": "missing"
+    }
+  ]
+}

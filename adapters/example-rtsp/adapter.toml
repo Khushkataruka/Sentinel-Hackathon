@@ -1,0 +1,24 @@
+# A department that hands us URLs directly. Nothing is discovered; every
+# camera is listed.
+#
+# Rename the folder and fill in real values, or delete it. As written it
+# registers and its cameras are ignored by ingest, because they are not in
+# the registry.
+
+name   = "example-rtsp"
+driver = "sentinel.ingest.adapters.builtin.rtsp"
+timeout_s = 5.0
+
+[[cameras]]
+camera_id = "EX-001"
+name      = "Example Toll North"
+url       = "rtsp://192.0.2.10:554/Streaming/Channels/101"
+lat       = 20.5992
+lon       = 72.9342
+
+[[cameras]]
+camera_id = "EX-002"
+name      = "Example Junction East"
+url       = "rtsp://192.0.2.11:554/Streaming/Channels/101"
+lat       = 20.6104
+lon       = 72.9511
