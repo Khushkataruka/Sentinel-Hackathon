@@ -1,0 +1,91 @@
+name: sentinel
+
+x-app: &app
+  build: { context: ., target: runtime }
+  image: sentinel-app:latest
+  env_file: [.env]
+  environment: &app-env
+    SENTINEL_DATABASE_URL: postgresql://sentinel:sentinel@postgres:5432/sentinel
+    SENTINEL_MEDIA_ROOT: /data/media
+    SENTINEL_ADAPTER_DIR: /app/docker/adapters
+    SENTINEL_COORDINATE_FILE: /app/db/seed/camera_coordinates.json
+    SENTINEL_LOG_JSON: "true"
+  depends_on:
+    postgres: { condition: service_healthy }
+    migrate:  { condition: service_completed_successfully }
+  restart: unless-stopped
+
+services:
+  postgres:
+    build: { context: ./docker/postgres }
+    environment:
+      POSTGRES_USER: sentinel
+      POSTGRES_PASSWORD: sentinel
+      POSTGRES_DB: sentinel
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sentinel -d sentinel"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  # One-shot. core/db.py builds its pool with no retry, so everything else
+  # waits on this rather than crash-looping.
+  migrate:
+    <<: *app
+    depends_on:
+      postgres: { condition: service_healthy }
+    command: ["python", "scripts/migrate.py", "--seed"]
+    restart: "no"
+
+  registry:
+    <<: *app
+    command: ["sentinel-registry", "serve", "--host", "0.0.0.0", "--port", "8000"]
+    ports: ["8000:8000"]
+    volumes: ["media:/data/media"]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  api:
+    <<: *app
+    command: ["sentinel-api", "--host", "0.0.0.0", "--port", "8001"]
+    ports: ["8001:8001"]
+    volumes: ["media:/data/media:ro"]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8001/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # Needs only the database; sync_to_registry writes the adapters table
+  # directly rather than calling the registry over HTTP.
+  ingest:
+    <<: *app
+    command: ["sentinel-ingest", "run"]
+    volumes: ["media:/data/media"]
+
+  pipelines:
+    <<: *app
+    command: ["sentinel-pipeline", "run", "--all"]
+    volumes: ["media:/data/media"]
+
+  correlation:
+    <<: *app
+    command: ["sentinel-correlation", "run"]
+
+  web:
+    build: { context: ., target: web }
+    ports: ["8080:8080"]
+    depends_on: [api, registry]
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  media:

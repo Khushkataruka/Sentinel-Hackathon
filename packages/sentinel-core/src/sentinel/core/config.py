@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     sentinel_base_url: str = ""
     sentinel_catalogue_path: str = "/api/ingest"
     sentinel_http_timeout: float = 15.0
+    sentinel_token: str = ""
+    sentinel_cookie: str = ""
 
     # -- models ------------------------------------------------------------
     # A missing weights file degrades to a null implementation and a loud log
@@ -65,6 +67,7 @@ class Settings(BaseSettings):
     # -- ingest ------------------------------------------------------------
     target_decode_fps: float = 10.0     # tracking needs 8-12; the archive needs 1
     archive_fps: float = 1.0
+
     min_track_frames: int = 3
     reconnect_backoff_initial_s: float = 2.0
     reconnect_backoff_max_s: float = 30.0
@@ -72,6 +75,11 @@ class Settings(BaseSettings):
     # Long-lived state has to recover from a hard cut, not assume continuity.
     pts_discontinuity_s: float = 5.0
     max_consecutive_decode_errors: int = 90
+
+    # -- crops -------------------------------------------------------------
+    # The crop is the only pixel data a pipeline sees, some extra normal content around is good.
+    crop_pad_frac: float = 0.12
+    crop_pad_top_two_wheeler_frac: float = 0.70
 
     # -- queues ------------------------------------------------------------
     queue_claim_batch: int = 8

@@ -4,7 +4,13 @@ from __future__ import annotations
 
 import numpy as np
 from sentinel.ingest.detect import Detection
-from sentinel.ingest.track import ByteTrack, KalmanBox, iou_matrix, xyxy_to_xyah
+from sentinel.ingest.track import (
+    ByteTrack,
+    KalmanBox,
+    class_mask,
+    iou_matrix,
+    xyxy_to_xyah,
+)
 
 
 def det(x1, y1, x2, y2, score=0.9, cls="car"):
@@ -216,3 +222,40 @@ def test_a_fresh_tracker_reuses_ids_from_one():
     a.update([det(100, 200, 180, 260)], 0.1, 0.0)
     b.update([det(400, 300, 480, 360)], 0.1, 0.0)
     assert {t.track_id for t in a.tracks} == {t.track_id for t in b.tracks} == {1}
+
+
+def test_person_box_cannot_capture_a_vehicle_track():
+    """A rider's person box overlaps its motorcycle heavily. Without a class
+    constraint the greedy match can hand it the bike's track, which then
+    keeps cls='motorcycle' while being fed person observations."""
+    tracker = ByteTrack()
+    bike = (300, 200, 380, 300)
+
+    for i in range(4):
+        tracker.update([Detection(bike, 0.9, "motorcycle")], 0.1, i * 0.1)
+
+    track = tracker.tracks[0]
+    assert track.cls == "motorcycle"
+
+    # A person box sitting right on top of the bike, plus the bike itself.
+    person = (305, 190, 375, 295)
+    tracker.update(
+        [Detection(person, 0.95, "person"), Detection(bike, 0.9, "motorcycle")],
+        0.1, 0.4,
+    )
+
+    bike_tracks = [t for t in tracker.tracks if t.cls == "motorcycle"]
+    person_tracks = [t for t in tracker.tracks if t.cls == "person"]
+    assert len(bike_tracks) == 1
+    assert len(person_tracks) == 1
+
+    # The bike's track took the bike box, not the higher-scoring person box.
+    assert bike_tracks[0].history[-1][1] == bike
+    assert person_tracks[0].history[-1][1] == person
+
+
+def test_class_mask_shape_and_values():
+    m = class_mask(["car", "person"], ["person", "car", "car"])
+    assert m.shape == (2, 3)
+    assert m.tolist() == [[0.0, 1.0, 1.0], [1.0, 0.0, 0.0]]
+    assert class_mask([], ["car"]).shape == (0, 1)

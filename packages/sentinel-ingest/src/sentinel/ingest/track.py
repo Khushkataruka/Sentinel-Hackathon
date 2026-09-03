@@ -59,6 +59,20 @@ def iou_matrix(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     return inter / (area_a + area_b - inter + 1e-9)
 
 
+def class_mask(track_classes: list[str], det_classes: list[str]) -> np.ndarray:
+    """1.0 where the classes agree, 0.0 where they do not.
+
+    Multiplied into the IoU before association. Without it a rider's person
+    box can win the greedy assignment against the motorcycle's own track,
+    which then keeps cls='motorcycle' while being fed person observations.
+    """
+    if not track_classes or not det_classes:
+        return np.zeros((len(track_classes), len(det_classes)))
+    return (
+        np.array(track_classes)[:, None] == np.array(det_classes)[None, :]
+    ).astype(float)
+
+
 def greedy_match(
     cost: np.ndarray, threshold: float
 ) -> tuple[list[tuple[int, int]], list[int], list[int]]:
@@ -287,7 +301,9 @@ class ByteTrack:
         # Stage one: high-confidence detections against everything.
         high_boxes = np.array([d.bbox for d in high], dtype=float).reshape(-1, 4)
         matches, unmatched_tracks, unmatched_high = greedy_match(
-            iou_matrix(track_boxes, high_boxes), self.match_threshold
+            iou_matrix(track_boxes, high_boxes)
+            * class_mask([t.cls for t in candidates], [d.cls for d in high]),
+            self.match_threshold,
         )
         for ti, di in matches:
             candidates[ti].observe(high[di], pts_s)
@@ -300,7 +316,9 @@ class ByteTrack:
             low_boxes = np.array([d.bbox for d in low], dtype=float).reshape(-1, 4)
             rem_boxes = np.array([t.bbox for t in remaining], dtype=float).reshape(-1, 4)
             second, still_unmatched, _ = greedy_match(
-                iou_matrix(rem_boxes, low_boxes), self.match_threshold
+                iou_matrix(rem_boxes, low_boxes)
+                * class_mask([t.cls for t in remaining], [d.cls for d in low]),
+                self.match_threshold,
             )
             for ri, di in second:
                 remaining[ri].observe(low[di], pts_s)

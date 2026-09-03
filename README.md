@@ -17,9 +17,12 @@ a deterministic stub behind it. Swapping in real weights changes one class.
 db/migrations/       001_schema.sql        the schema, verbatim
                      002_pipeline_jobs.sql the crop queues, held in Postgres
                      003_loop_period.sql   measured loop length, per camera
+                     004_crop_bbox.sql     where the crop was cut from
 db/seed/             departments, users, model_versions, rarity rows
                      camera_coordinates.json  positions the catalogue lacks
 scripts/migrate.py   applies migrations in order, once each
+scripts/survey.py    provisional camera profiles, so pipelines are not all skipped
+docker/              postgres image, nginx config, container adapter set
 adapters/            drop-in adapter folders
 frontend/            React control room
 packages/
@@ -40,29 +43,39 @@ package a module came from.
 
 ```bash
 cp .env.example .env          # then set SENTINEL_SENTINEL_BASE_URL
-make install                  # uv sync --all-extras
-make db-up                    # postgres + postgis + pgvector in docker
-make migrate                  # or: make seed, to load development data
+make build                    # images; the first one exports YOLOv8n and is slow
+make up                       # the whole stack
 ```
 
-Four processes:
+Frontend on **:8080**, registry on :8000, API on :8001. `make ps` for status,
+`make logs S=ingest` to follow one service, `make down` to stop.
 
-```bash
-make registry                 # :8000
-make ingest                   # one worker per camera
-uv run sentinel-pipeline run --all
-uv run sentinel-correlation run
-uv run sentinel-api           # :8001, serves the frontend build
-```
+Eight containers: postgres (postgis + pgvector), a one-shot `migrate`,
+registry, ingest, pipelines, correlation, api, and an nginx that serves the
+frontend build. nginx is not decoration, the frontend talks to *two*
+services, and the API mounts its static files at `/` last, so letting it
+serve the build would swallow every registry route as a 404.
 
 For the evaluation the design calls for three process groups; setting
-`SENTINEL_EMBED_CORRELATION=1` runs correlation inside the API process,
-which gets you there.
+`SENTINEL_EMBED_CORRELATION=1` runs correlation inside the API process, which
+gets you there and lets you drop the `correlation` container.
+
+Without docker:
+
+```bash
+make install                  # uv sync --all-extras
+make db-up && make seed
+uv run sentinel-registry serve
+uv run sentinel-ingest run
+uv run sentinel-pipeline run --all
+uv run sentinel-correlation run
+uv run sentinel-api           # :8001
+```
 
 ### Onboarding the sandbox cameras
 
 ```bash
-uv run sentinel-registry sync-sentinel --department-id 1
+make sync                     # or: uv run sentinel-registry sync-sentinel --department-id 1
 ```
 
 This reads `{base}/api/ingest` and upserts every camera it lists. Camera ids
@@ -83,7 +96,20 @@ curl -X PUT localhost:8000/cameras/CAM-1/profile \
        "plate_viable":false,"trust_level":0.8}'
 ```
 
-Cameras still waiting: `GET /cameras/needing-survey`.
+Cameras still waiting: `scripts/survey.py --list`. Note that
+`GET /cameras/needing-survey` will look empty after a sync — it finds cameras
+with no profile *row*, and the sync writes a permit-nothing row for every
+camera it imports. The backlog is a profile that permits nothing, not a
+missing one.
+
+To get the stack producing something visible before a real survey exists:
+
+```bash
+make survey ARGS=--all        # provisional profiles: colour/type/make only
+```
+
+That deliberately leaves `plate_viable` false and `permitted_violations`
+empty. It is not the section 6 survey and says so in the audit trail.
 
 ---
 
@@ -110,7 +136,28 @@ empty `var/models/`.
 
 ---
 
-## The one schema addition
+## The crop is not the bounding box
+
+Every pipeline sees one image: the best-frame crop. Not the frame, not the
+neighbouring boxes.
+
+It used to cut tight to the detector box. COCO annotates a `motorcycle` as the
+machine without its rider, so the rider's head is above the box — and
+`no_helmet` is about the head. The pipeline was being asked a question the
+crop could not answer.
+
+The crop is now padded: 12% on every side, plus 70% of the box height above a
+two-wheeler, clipped to the frame. `sightings.bbox` is still the vehicle;
+`sightings.crop_bbox` is where the crop was taken from. Both are frame pixels.
+`sighting_riders.bbox` is crop pixels — 004 adds column comments saying which
+is which, because nothing did before.
+
+Scoring still uses the tight box: sharpness over a padded crop averages in
+road, and edge margin measures how much of the vehicle the frame cuts off.
+
+COCO has no autorickshaw class, so autos land as `car` or `truck`.
+
+## The schema additions
 
 `002_pipeline_jobs.sql` adds `pipeline_jobs`, `trim_pipeline_queue()` and
 `pipeline_queue_depth`. Nothing else was touched.
@@ -124,7 +171,10 @@ To move to Redis or NATS, delete that migration and `sentinel/core/queue.py`.
 Nothing else references the table.
 
 `003_loop_period.sql` adds one nullable column, `camera_profiles.loop_period_s`.
-Its reason is measured, not theoretical — see the section below.
+
+`004_crop_bbox.sql` adds one nullable column, `sightings.crop_bbox`, and
+comments the coordinate space of the three `bbox` columns, which disagreed
+with each other and said nothing about it.
 
 ---
 

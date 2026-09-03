@@ -12,15 +12,44 @@ from dataclasses import dataclass
 
 import cv2
 import numpy as np
+from sentinel.core.config import settings
 from sentinel.ingest.track import Track
+
+#: Classes whose detector box excludes the person riding it.
+TWO_WHEELER_CLASSES = {"motorcycle", "bicycle"}
 
 
 @dataclass
 class BestFrame:
     pts_s: float
-    bbox: tuple[int, int, int, int]
+    bbox: tuple[int, int, int, int]          # the vehicle, in frame pixels
+    crop_bbox: tuple[int, int, int, int]     # where `crop` was cut, same space
     score: float
     crop: np.ndarray
+
+
+def pad_bbox(
+    bbox: tuple[int, int, int, int], cls: str, frame_w: int, frame_h: int
+) -> tuple[int, int, int, int]:
+    """Grow the detector box into the crop the pipelines need, clipped to frame.
+
+    COCO annotates a motorcycle without its rider, so a tight box puts the
+    head outside the only image `violate` ever opens.
+    """
+    x1, y1, x2, y2 = bbox
+    w, h = max(x2 - x1, 1), max(y2 - y1, 1)
+
+    side = settings.crop_pad_frac
+    top = side
+    if cls in TWO_WHEELER_CLASSES:
+        top += settings.crop_pad_top_two_wheeler_frac
+
+    return (
+        max(0, int(round(x1 - w * side))),
+        max(0, int(round(y1 - h * top))),
+        min(frame_w, int(round(x2 + w * side))),
+        min(frame_h, int(round(y2 + h * side))),
+    )
 
 
 def sharpness(image: np.ndarray) -> float:
@@ -83,12 +112,22 @@ def choose(
         x1, y1, x2, y2 = bbox
         image = frames[pts]
         h, w = image.shape[:2]
-        crop = image[max(0, y1) : min(h, y2), max(0, x1) : min(w, x2)]
+
+        # Score the tight box, store the padded one. Padding is mostly road,
+        # and the padded box is clipped by construction, so scoring it would
+        # blunt sharpness and report every vehicle as edge-clipped.
+        tight = image[max(0, y1) : min(h, y2), max(0, x1) : min(w, x2)]
+        if tight.size == 0:
+            continue
+
+        crop_bbox = pad_bbox(bbox, track.cls, w, h)
+        cx1, cy1, cx2, cy2 = crop_bbox
+        crop = image[cy1:cy2, cx1:cx2]
         if crop.size == 0:
             continue
 
         size_term = area / max_area
-        sharp_term = min(sharpness(crop) / 300.0, 1.0)
+        sharp_term = min(sharpness(tight) / 300.0, 1.0)
         edge_term = edge_margin(bbox, frame_w, frame_h)
 
         # Size dominates, because a 40-pixel vehicle is unusable however
@@ -97,6 +136,9 @@ def choose(
 
         if score > best_score:
             best_score = score
-            best = BestFrame(pts_s=pts, bbox=bbox, score=score, crop=crop.copy())
+            best = BestFrame(
+                pts_s=pts, bbox=bbox, crop_bbox=crop_bbox,
+                score=score, crop=crop.copy(),
+            )
 
     return best

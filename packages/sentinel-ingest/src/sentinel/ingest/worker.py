@@ -15,7 +15,7 @@ import asyncio
 import time
 import uuid
 from collections import OrderedDict
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import numpy as np
@@ -188,45 +188,67 @@ class CameraWorker:
             return
         w, h = frame.shape
 
+        def at_pts(pts_s: float) -> datetime:
+            """Wall clock for a PTS, anchored on the frame in hand.
+
+            Clamped: at a scene cut this is called with the post-cut frame
+            while the tracks still carry pre-cut PTS.
+            """
+            return frame.seen_at - timedelta(seconds=max(0.0, frame.pts_s - pts_s))
+
         for track in tracks:
             if track.cls not in VEHICLE_CLASSES:
-                # People are tracked so that riders can be attributed to a
-                # two-wheeler, but a pedestrian is not a sighting. This
-                # platform cannot answer "where has this person been", and
-                # writing person sightings is how it would start to.
+                # People are tracked so a person box competes for the
+                # association rather than being absorbed into a vehicle
+                # track, but a pedestrian is not a sighting. This platform
+                # cannot answer "where has this person been", and writing
+                # person sightings is how it would start to.
                 continue
 
             best = bestframe.choose(track, self._frames, w, h)
             if best is None:
                 continue
 
-            when = frame.seen_at
-            read_id = None
+            seen_at = at_pts(best.pts_s)
+            read_id = uuid.uuid4()
+
+            # Outside the transaction: a file write cannot be rolled back.
+            # The name is unique, so failure means cleanup, not collision.
+            try:
+                crop_ref = writer.write_crop(
+                    self.camera_id, seen_at, read_id, best.crop
+                )
+            except Exception as exc:
+                log.error("crop_write_failed", camera=self.camera_id,
+                          track=track.track_id, error=str(exc))
+                continue
+
+            written = False
             try:
                 async with transaction() as conn:
-                    crop_ref = writer.write_crop(
-                        self.camera_id, when, track.track_id, best.crop
-                    )
-                    read_id = await writer.write_sighting(
+                    written = await writer.write_sighting(
                         conn,
+                        read_id=read_id,
                         camera_id=self.camera_id,
                         track_id=self._scoped_track_id(track),
-                        seen_at=when,
-                        track_start_at=when,
-                        track_end_at=when,
+                        seen_at=seen_at,
+                        track_start_at=at_pts(track.start_pts_s),
+                        track_end_at=at_pts(track.last_pts_s),
                         bbox=best.bbox,
+                        crop_bbox=best.crop_bbox,
                         cls=track.cls,
                         crop_ref=crop_ref,
                         detect_model_id=self.detect_model_id,
                         gating=self.gating,
-                    )
+                    ) is not None
             except Exception as exc:
                 log.error("sighting_write_failed", camera=self.camera_id,
                           track=track.track_id, error=str(exc))
-                continue
 
-            if read_id is not None:
+            if written:
                 self.sightings_written += 1
+            else:
+                writer.discard_crop(crop_ref)
 
             if self.traffic is not None:
                 self.traffic.observe_track_end(track.track_id, track.cls, track.duration_s)

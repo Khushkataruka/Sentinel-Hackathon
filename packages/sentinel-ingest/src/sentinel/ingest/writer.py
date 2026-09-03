@@ -94,21 +94,36 @@ async def load_gating(conn: asyncpg.Connection, camera_id: str) -> Gating | None
 
 
 def write_crop(camera_id: str, when: datetime, read_id: uuid.UUID, crop: np.ndarray) -> str:
-    """Put the best-frame crop on disk and return its stored reference."""
+    """Put the best-frame crop on disk and return its stored reference.
+
+    Named by read_id. Naming it by the tracker id let a looping feed
+    overwrite one vehicle's crop with another's in the same hour partition,
+    since tracker ids restart at 1 at every scene cut.
+    """
     path = media.crop_path(camera_id, when, read_id)
     cv2.imwrite(str(path), crop, [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY])
     return media.relative(path)
 
 
+def discard_crop(crop_ref: str) -> None:
+    """Drop a crop whose sighting did not commit."""
+    try:
+        media.absolute(crop_ref).unlink(missing_ok=True)
+    except OSError as exc:
+        log.warning("orphan_crop_unlink_failed", crop_ref=crop_ref, error=str(exc))
+
+
 async def write_sighting(
     conn: asyncpg.Connection,
     *,
+    read_id: uuid.UUID,
     camera_id: str,
     track_id: str,
     seen_at: datetime,
     track_start_at: datetime | None,
     track_end_at: datetime | None,
     bbox: tuple[int, int, int, int],
+    crop_bbox: tuple[int, int, int, int] | None,
     cls: str,
     crop_ref: str,
     detect_model_id: int | None,
@@ -120,23 +135,26 @@ async def write_sighting(
     written -- which happens when a worker restarts mid-flush and is not an
     error.
 
+    read_id is supplied by the caller because the crop is written under that
+    name before this transaction opens.
+
     The caller MUST pass a connection already inside a transaction.
     """
-    read_id = uuid.uuid4()
     statuses = {p: gating.status_for(p) for p in Pipeline}
 
     row = await conn.fetchrow(
         """
         INSERT INTO sightings (
             read_id, camera_id, track_id, seen_at, track_start_at, track_end_at,
-            bbox, class, crop_ref, detect_model_id,
+            bbox, crop_bbox, class, crop_ref, detect_model_id,
             describe_status, embed_status, plate_status, violation_status)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
         ON CONFLICT (camera_id, track_id) DO NOTHING
         RETURNING read_id
         """,
         read_id, camera_id, track_id, seen_at, track_start_at, track_end_at,
-        list(bbox), cls, crop_ref, detect_model_id,
+        list(bbox), list(crop_bbox) if crop_bbox else None,
+        cls, crop_ref, detect_model_id,
         statuses[Pipeline.DESCRIBE].value, statuses[Pipeline.EMBED].value,
         statuses[Pipeline.PLATE].value, statuses[Pipeline.VIOLATE].value,
     )

@@ -124,7 +124,7 @@ def load_coordinates(path: Path | str | None = None) -> dict[str, dict[str, Any]
 
 
 def _auth_headers() -> dict[str, str]:
-    token = os.environ.get("SENTINEL_SENTINEL_TOKEN", "").strip()
+    token = settings.sentinel_token.strip()
     return {"Authorization": f"Bearer {token}"} if token else {}
 
 
@@ -134,8 +134,11 @@ def _auth_cookies() -> dict[str, str]:
     The endpoint redirects an unauthenticated request to a sign-in page, so
     without one of these the sync gets HTML and fails with a clear message
     rather than importing nothing and reporting success.
+
+    From settings, not os.environ: pydantic loads .env into the settings
+    object and not into the environment, so a cookie set there was invisible.
     """
-    raw = os.environ.get("SENTINEL_SENTINEL_COOKIE", "").strip()
+    raw = settings.sentinel_cookie.strip()
     cookies: dict[str, str] = {}
     for part in raw.split(";"):
         if "=" in part:

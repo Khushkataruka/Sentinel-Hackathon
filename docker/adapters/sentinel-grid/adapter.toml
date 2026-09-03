@@ -1,0 +1,10 @@
+# The only adapter ingest loads in the container.
+#
+# adapters/example-rtsp/ is excluded deliberately: it points at TEST-NET
+# 192.0.2.x and its self-test would stall on every ingest start.
+
+name   = "sentinel-grid"
+driver = "sentinel.ingest.adapters.builtin.sentinel_grid"
+
+# base_url falls back to SENTINEL_SENTINEL_BASE_URL.
+timeout_s = 15.0
