@@ -12,12 +12,18 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 BIN="${MEDIAMTX:-mediamtx}"
 CONF="$HERE/var/mediamtx.yml"
+LOCAL_VIDEO="${LOCAL_GRID_VIDEO:-$HERE/cctv052x2004080516x01638.mp4}"
 
 case "${1:-start}" in
 start)
   mkdir -p "$HERE/var/samples"
-  [ -f "$HERE/var/samples/CAM-A.mp4" ] || \
-    python "$HERE/tools/make_test_video.py" "$HERE/var/samples/CAM-A.mp4" 7
+  if [ -f "$LOCAL_VIDEO" ]; then
+    CAM_A_VIDEO="$LOCAL_VIDEO"
+  else
+    CAM_A_VIDEO="$HERE/var/samples/CAM-A.mp4"
+    [ -f "$CAM_A_VIDEO" ] || \
+      python "$HERE/tools/make_test_video.py" "$CAM_A_VIDEO" 7
+  fi
   [ -f "$HERE/var/samples/CAM-B.mp4" ] || \
     python "$HERE/tools/make_test_video.py" "$HERE/var/samples/CAM-B.mp4" 11
 
@@ -45,7 +51,7 @@ paths:
   stream/CAM-A:
     runOnInit: >
       ffmpeg -hide_banner -loglevel error -re -stream_loop -1
-      -i $HERE/var/samples/CAM-A.mp4
+      -i $CAM_A_VIDEO
       -c:v libx264 -preset ultrafast -tune zerolatency -g 15 -pix_fmt yuv420p -an
       -f rtsp -rtsp_transport tcp rtsp://127.0.0.1:8554/stream/CAM-A
   stream/CAM-B:
