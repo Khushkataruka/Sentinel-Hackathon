@@ -1,6 +1,6 @@
 {
   "source": "cameragrid.html COORDS table, 2026-08-24 snapshot",
-  "warning": "quality is one of ok|approx|guess. The /api/ingest catalogue carries no coordinates at all; these were placed by hand.",
+  "warning": "quality is one of ok|approx|guess. The /cameras.json catalogue carries no coordinates at all; these were placed by hand.",
   "cameras": [
     {
       "id": "1",
@@ -286,5 +286,6 @@
       "lon": null,
       "quality": "missing"
     }
-  ]
+  ],
+  "id_note": "Keyed by the grid's original ids, '1'..'30'. The grid has since renamed them to 'cam01'..'cam30'; the sync matches on a canonical id so these entries did not have to be re-surveyed. See _canonical_id in sentinel.registry.catalogue."
 }

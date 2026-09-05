@@ -6,5 +6,12 @@
 name   = "sentinel-grid"
 driver = "sentinel.ingest.adapters.builtin.sentinel_grid"
 
-# base_url falls back to SENTINEL_SENTINEL_BASE_URL.
+# base_url falls back to SENTINEL_SENTINEL_BASE_URL, and the RTSP credentials
+# come only from SENTINEL_GRID_EMAIL / SENTINEL_GRID_PASSWORD -- never from
+# this file, which ships inside the image.
 timeout_s = 15.0
+
+# RTSP and WebRTC are not proxyable, so they come off the gateway directly.
+# The host and ports come from SENTINEL_GRID_MEDIA_HOST / _RTSP_PORT /
+# _WHEP_PORT; setting them here would take precedence over the environment,
+# which is the wrong way round for something that differs per deployment.

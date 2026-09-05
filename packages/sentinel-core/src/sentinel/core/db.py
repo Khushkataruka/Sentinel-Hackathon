@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
+from urllib.parse import urlsplit
 
 import asyncpg
 from sentinel.core.config import settings
@@ -57,16 +58,51 @@ async def _init_connection(conn: asyncpg.Connection) -> None:
             decoder=decode_vector,
             format="text",
         )
-    except asyncpg.exceptions.UndefinedObjectError:  # pragma: no cover
+    except (asyncpg.exceptions.UndefinedObjectError, ValueError) as exc:
         # Extension not installed yet -- migrations have not run. Let the
         # caller fail on the query rather than here, where the message is worse.
-        log.warning("pgvector_codec_unavailable", hint="run migrations first")
+        #
+        # Two spellings of the same condition: the server raises
+        # UndefinedObject when it can resolve nothing, and asyncpg raises a
+        # plain ValueError("unknown type: public.vector") when introspection
+        # comes back empty. Catching only the first meant a fresh database
+        # failed to open a pool at all, with an error that named neither
+        # pgvector nor the migrations.
+        if isinstance(exc, ValueError) and "unknown type" not in str(exc):
+            raise
+        log.warning("pgvector_codec_unavailable", error=str(exc),
+                    hint="run migrations first: make migrate")
+
+
+def _check_dsn(dsn: str) -> None:
+    """Fail on an unparseable DSN with a message that names the cause.
+
+    A DSN is a URL, so a password containing any of []@:/?#% has to be
+    percent-encoded. Unencoded, a '[' surfaces from urllib as "Invalid IPv6
+    URL" -- which names neither the password nor the setting, and sends you
+    looking at the network for an hour.
+
+    Checked here rather than around create_pool: that call raises ValueError
+    for unrelated reasons too, and a wrapper there blamed the password for a
+    missing pgvector extension.
+    """
+    if not dsn.startswith(("postgres://", "postgresql://")):
+        return          # a bare name or a unix socket; asyncpg's problem, not ours
+    try:
+        urlsplit(dsn)
+    except ValueError as exc:
+        raise ValueError(
+            f"SENTINEL_DATABASE_URL could not be parsed ({exc}). A password "
+            "containing any of []@:/?#% must be percent-encoded -- '[' is %5B, "
+            "'@' is %40. Nothing else about the URL is wrong."
+        ) from exc
 
 
 async def get_pool() -> asyncpg.Pool:
     """The process-wide pool. Created on first use."""
     global _pool
     if _pool is None:
+        _check_dsn(settings.database_url)
         _pool = await asyncpg.create_pool(
             dsn=settings.database_url,
             min_size=settings.db_min_pool,

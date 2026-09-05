@@ -38,6 +38,7 @@ from datetime import datetime  # noqa: E402
 
 import cv2  # noqa: E402
 import numpy as np  # noqa: E402
+from sentinel.core import streamurl  # noqa: E402
 from sentinel.core.config import settings  # noqa: E402
 from sentinel.core.logging import get_logger  # noqa: E402
 from sentinel.ingest.adapters.base import StreamHandle  # noqa: E402
@@ -104,18 +105,27 @@ class CameraStream:
 
     def _open(self) -> None:
         url = self.handle.url
-        if self.handle.transport.lower() == "tcp" and url.startswith("rtsp"):
+        # The RTSP endpoints authenticate per connection with credentials in
+        # the URL, so what goes to a log line is never `url` itself.
+        safe_url = streamurl.redact(url)
+
+        options = dict(self.handle.options)
+        if streamurl.is_rtsp(url) and self.handle.transport.lower() == "tcp":
             # Belt and braces: the env var covers the process, this covers
             # the case where something else has already reset it.
+            options = {"rtsp_transport": "tcp", **options}
+        if options:
+            # OpenCV splits this on '|' and then on the first ';' of each
+            # pair, so a value may contain ';' -- a multi-cookie Cookie
+            # header does -- but a '|' would silently truncate it.
             os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "|".join(
-                f"{k};{v}" for k, v in
-                {"rtsp_transport": "tcp", **self.handle.options}.items()
+                f"{k};{str(v).replace('|', '')}" for k, v in options.items()
             )
 
         cap = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
         if not cap.isOpened():
             cap.release()
-            raise DecodeError(f"could not open {url}")
+            raise DecodeError(f"could not open {safe_url}")
 
         # A small buffer keeps latency down. We do NOT read CAP_PROP_FPS:
         # the guide says it does not match the delivery rate, and using it
@@ -127,7 +137,7 @@ class CameraStream:
         self.clock.reset()          # the replayed GOP must not be timed
         self._last_emitted_pts = None
         self._frames_since_connect = 0
-        log.info("stream_open", camera=self.camera_id, url=url,
+        log.info("stream_open", camera=self.camera_id, url=safe_url,
                  transport=self.handle.transport)
 
     def _reconnect(self) -> None:

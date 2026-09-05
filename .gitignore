@@ -216,3 +216,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# mediamtx writes a self-signed cert into its working directory. tools/
+# local_grid.sh now runs it from var/, but a stray pair in the repo root is
+# still a private key, and a private key is never a commit.
+auto.crt
+auto.key

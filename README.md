@@ -78,9 +78,9 @@ uv run sentinel-api           # :8001
 make sync                     # or: uv run sentinel-registry sync-sentinel --department-id 1
 ```
 
-This reads `{base}/api/ingest` and upserts every camera it lists. Camera ids
-are theirs; the catalogue is the contract and the URL pattern is not, so
-nothing here constructs an endpoint.
+This reads `{base}/cameras.json` — falling back to the older `/api/ingest`
+— and upserts every camera it lists. Camera ids are theirs; the catalogue is
+the contract, so a URL is only constructed when an entry omits one.
 
 Synced cameras arrive with a **provisional profile that permits nothing**.
 They will produce sightings with every pipeline marked `skipped` until a
@@ -224,7 +224,7 @@ Reproduce any of it with `sentinel-ingest preflight <camera_id>`.
 
 ## The catalogue is not what the code first assumed
 
-`GET /api/ingest` returns, per camera:
+`GET /cameras.json` returns, per camera:
 
 ```json
 {"id": "13", "location": "13 CN Vidhyalaya", "live": true,
@@ -242,11 +242,50 @@ Three consequences:
   1 missing.** A guessed position makes its route distances and speed checks
   unreliable, so it reduces the camera's provisional `trust_level`. Fixing
   those coordinates is worth more than any model work.
-- **The endpoint needs a session.** It 301s to a sign-in page. Set
+- **The endpoint needs a session.** It 302s to `/auth/login`. Set
   `SENTINEL_SENTINEL_COOKIE` or `SENTINEL_SENTINEL_TOKEN`. A sync that gets
   HTML now fails loudly rather than reporting zero cameras.
 - **Mixed everything**: h264 and hevc, 1280x720 through 2560x1440, and 19 of
   30 declare no codec at all. No fixed-shape inference batch will work.
+
+## Two hosts, two credentials
+
+The grid does not serve everything from one place, and confusing the two is
+the fastest way to a stream that never opens.
+
+| | Endpoint | Authenticates with |
+|---|---|---|
+| HLS | `https://cctv.corp8.cloud/<id>/index.m3u8` | the session (cookie or token) |
+| RTSP | `rtsp://<email>:<password>@103.250.160.189:8554/stream/<id>` | credentials in the URL |
+| WHEP | `http://<email>:<password>@103.250.160.189:8889/stream/<id>/whep` | credentials in the URL |
+
+A CDN terminates HTTP, so it can carry HLS and cannot carry RTSP's
+interleaved TCP or WebRTC's UDP. Those come off the gateway's own address,
+and every connection authenticates with the registered email and access
+password embedded in the URL:
+
+```bash
+SENTINEL_GRID_EMAIL=you@example.com     # unencoded; the '@' is encoded for you
+SENTINEL_GRID_PASSWORD=...
+SENTINEL_GRID_MEDIA_HOST=103.250.160.189
+```
+
+Three things follow, all in `sentinel/core/streamurl.py`:
+
+- **The `@` in the email is percent-encoded** — `you%40example.com`. Unencoded
+  it does not error; it ends the userinfo early and points the connection at
+  a hostname of `example.com`.
+- **The credentialed URL is built in `open()` and nowhere else.** A `CameraRef`
+  is persisted to the `adapters` table and served over the API, so it carries
+  a bare URL. `decode.py` and `preflight` redact before logging or printing —
+  a preflight report gets pasted into support mail.
+- **Catalogue URLs are retargeted onto the media host.** The grid's own entries
+  are written for a browser and may still name the CDN, which resolves and
+  then carries nothing.
+
+Where 8554/TCP is blocked, `SENTINEL_GRID_PREFER_HLS=1` decodes the CDN's HLS
+instead — the guide's own fallback, at the cost of latency and a segment of
+buffering. The session cookie goes to FFmpeg as a `Cookie` header.
 
 ## Notes on the sandbox feeds
 

@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
+from sentinel.core import streamurl
 from sentinel.core.logging import get_logger
 from sentinel.ingest.adapters.base import StreamHandle
 from sentinel.ingest.decode import CameraStream
@@ -64,7 +65,9 @@ def run(handle: StreamHandle, seconds: float = 180.0,
     a recording of a few minutes, short enough to run over fifty cameras in
     an afternoon.
     """
-    result = Preflight(camera_id=handle.camera_id, url=handle.url)
+    # Redacted at construction: a preflight report is pasted into
+    # tickets and support mail, and the RTSP URL carries the password.
+    result = Preflight(camera_id=handle.camera_id, url=streamurl.redact(handle.url))
     stream = CameraStream(handle, target_fps=target_fps or 0.0)  # 0 = no throttle
 
     pts_values: list[float] = []

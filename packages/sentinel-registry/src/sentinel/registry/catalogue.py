@@ -1,6 +1,6 @@
 """Sync from the Sentinel sandbox catalogue.
 
-Written against the real payload, not a guess at it. What GET /api/ingest
+Written against the real payload, not a guess at it. What GET /cameras.json
 actually returns, per camera:
 
     {"id": "13", "location": "13 CN Vidhyalaya", "live": true,
@@ -17,13 +17,27 @@ Three things about that shape drive everything below.
    position cannot be onboarded at all. Positions come from a separate
    coordinate file; see load_coordinates().
 
-2. THE ENDPOINT REQUIRES A SESSION. It 301s to a sign-in page for an
+2. THE ENDPOINT REQUIRES A SESSION. It 302s to /auth/login for an
    unauthenticated request. Credentials come from the environment, never
-   from adapter.toml, and are sent as either a bearer token or a cookie.
+   from adapter.toml, and are sent as either a bearer token or a cookie --
+   see sentinel.core.gridauth.
 
-3. CAMERA IDS ARE BARE INTEGERS AS STRINGS -- "1" through "30". They are
-   unique only within this grid, so department scoping matters: a Home
-   Department camera "1" and an RTO camera "1" are different cameras.
+   The RTSP and WebRTC URLs authenticate separately, per connection, with
+   the registered email and access password in the URL. Those credentials
+   are attached at open() time by the adapter and are NOT stored here: what
+   this module writes to the adapters table is deliberately bare, because a
+   row in a database is not a place to keep a password.
+
+3. CAMERA IDS ARE THE GRID'S, AND THEY HAVE ALREADY CHANGED ONCE -- bare
+   integers "1".."30" became "cam01".."cam30". They are unique only within
+   this grid, so department scoping matters: a Home Department camera "1"
+   and an RTO camera "1" are different cameras.
+
+   The coordinate file was keyed by the old form, and a renamed id is
+   indistinguishable from an unknown camera: every one would have been
+   skipped for "no coordinate", and the sync would have reported success
+   having onboarded nothing. Positions are therefore looked up by a
+   canonical id -- see _canonical_id -- so a survey outlives a rename.
 
 The catalogue reports resolution and codec. It does NOT decide capability:
 plate_viable, density_viable and permitted_violations all stay false and
@@ -41,6 +55,7 @@ from typing import Any
 
 import asyncpg
 import httpx
+from sentinel.core import gridauth, streamurl
 from sentinel.core.config import settings
 from sentinel.core.logging import get_logger
 from sentinel.core.models import CameraIn, CameraProfileIn
@@ -63,6 +78,23 @@ POSITION_QUALITY_TRUST = {
 }
 
 UNSURVEYED_TRUST = 0.5
+
+
+def _canonical_id(value: str) -> str:
+    """A camera id reduced to what survives a renaming.
+
+    "cam01", "CAM-1", "01" and "1" are all the same camera on this grid, and
+    the estate has already been renumbered once mid-project. Positions are
+    surveyed by hand and are expensive to redo, so they are matched on this
+    rather than on the literal string the catalogue happens to use today.
+
+    Anything without digits falls back to the lowercased original, so an id
+    like "junction-west" still matches itself.
+    """
+    digits = "".join(c for c in value if c.isdigit())
+    if not digits:
+        return value.strip().lower()
+    return digits.lstrip("0") or "0"
 
 
 def _pick(entry: dict[str, Any], *keys: str, default: Any = None) -> Any:
@@ -114,6 +146,10 @@ def load_coordinates(path: Path | str | None = None) -> dict[str, dict[str, Any]
         cid = str(entry.get("id") or entry.get("camera_id") or "")
         if cid and entry.get("lat") is not None and entry.get("lon") is not None:
             out[cid] = entry
+    # Aliases, added after every literal id so a real id is never shadowed
+    # by another camera's canonical form.
+    for cid in list(out):
+        out.setdefault(_canonical_id(cid), out[cid])
 
     qualities: dict[str, int] = {}
     for entry in out.values():
@@ -123,58 +159,49 @@ def load_coordinates(path: Path | str | None = None) -> dict[str, dict[str, Any]
     return out
 
 
-def _auth_headers() -> dict[str, str]:
-    token = settings.sentinel_token.strip()
-    return {"Authorization": f"Bearer {token}"} if token else {}
-
-
-def _auth_cookies() -> dict[str, str]:
-    """Session cookie, as `name=value` pairs in SENTINEL_SENTINEL_COOKIE.
-
-    The endpoint redirects an unauthenticated request to a sign-in page, so
-    without one of these the sync gets HTML and fails with a clear message
-    rather than importing nothing and reporting success.
-
-    From settings, not os.environ: pydantic loads .env into the settings
-    object and not into the environment, so a cookie set there was invisible.
-    """
-    raw = settings.sentinel_cookie.strip()
-    cookies: dict[str, str] = {}
-    for part in raw.split(";"):
-        if "=" in part:
-            k, v = part.split("=", 1)
-            cookies[k.strip()] = v.strip()
-    return cookies
-
-
 async def fetch_catalogue(base_url: str | None = None) -> list[dict[str, Any]]:
-    url = (
-        f"{base_url.rstrip('/')}{settings.sentinel_catalogue_path}"
-        if base_url
-        else settings.sentinel_catalogue_url
-    )
-    if not url or url.startswith("/"):
+    """The catalogue, from the first path that answers JSON.
+
+    The grid renamed the endpoint from /api/ingest to /cameras.json. Both
+    are tried, in configured order, so a sync does not fail on an estate
+    that has not moved yet -- and only a 404 advances to the next one, since
+    a 401 or a sign-in redirect means the path was right and the session
+    was not.
+    """
+    urls = settings.sentinel_catalogue_urls(base_url)
+    if not urls or urls[0].startswith("/"):
         raise RuntimeError("SENTINEL_SENTINEL_BASE_URL is not configured")
 
+    body: Any = None
+    tried: list[str] = []
     async with httpx.AsyncClient(
         timeout=settings.sentinel_http_timeout,
         follow_redirects=True,
-        headers=_auth_headers(),
-        cookies=_auth_cookies(),
+        headers=gridauth.session_headers(),
+        cookies=gridauth.session_cookies(),
     ) as client:
-        response = await client.get(url)
-        response.raise_for_status()
+        for url in urls:
+            response = await client.get(url)
+            if response.status_code == 404 and url != urls[-1]:
+                tried.append(f"{url}: 404")
+                continue
+            response.raise_for_status()
 
-        content_type = response.headers.get("content-type", "")
-        if "json" not in content_type.lower():
-            # We were handed the sign-in page. Say so plainly: a sync that
-            # reported "0 cameras" here would look like an empty grid.
-            raise RuntimeError(
-                f"{url} returned {content_type or 'no content-type'}, not JSON "
-                "-- the catalogue needs a session. Set SENTINEL_SENTINEL_COOKIE "
-                "or SENTINEL_SENTINEL_TOKEN."
-            )
-        body = response.json()
+            content_type = response.headers.get("content-type", "")
+            if "json" not in content_type.lower():
+                # We were handed the sign-in page. Say so plainly: a sync
+                # that reported "0 cameras" here would look like an empty grid.
+                raise RuntimeError(
+                    f"{url} returned {content_type or 'no content-type'}, not JSON "
+                    "-- the catalogue needs a session. Set SENTINEL_SENTINEL_COOKIE "
+                    "or SENTINEL_SENTINEL_TOKEN."
+                )
+            body = response.json()
+            if tried:
+                log.info("catalogue_path_fallback", used=url, skipped=tried)
+            break
+        else:
+            raise RuntimeError("no catalogue path answered -- " + "; ".join(tried))
 
     if isinstance(body, dict):
         for key in ("cameras", "streams", "items", "data", "results"):
@@ -206,7 +233,9 @@ async def sync(
             continue
         camera_id = str(camera_id)
 
-        position = coordinates.get(camera_id)
+        position = coordinates.get(camera_id) or coordinates.get(
+            _canonical_id(camera_id)
+        )
         if not position:
             # A camera with no position cannot go on the map, cannot take
             # part in coverage analysis, and cannot have a route leg
@@ -223,7 +252,17 @@ async def sync(
         height = _pick(entry, "height", "frame_height")
         codec = str(_pick(entry, "codec", "video_codec", default="") or "")
         declared_fps = _pick(entry, "fps", "framerate", "frame_rate")
-        rtsp = _pick(entry, "rtsp_url", "rtsp", "rtspUrl")
+        # Bare, and pointed at the host that can actually serve it. The
+        # catalogue's RTSP entry may name the CDN, which cannot carry RTSP,
+        # and may arrive with credentials already on it, which must not be
+        # written to a database row. The adapter re-attaches them at open().
+        rtsp = streamurl.retarget(
+            streamurl.strip_credentials(str(
+                _pick(entry, "rtsp_url", "rtsp", "rtspUrl") or ""
+            )),
+            settings.grid_media_host or None, settings.grid_rtsp_port,
+        ) or None
+        hls = _pick(entry, "hls_live_url", "hls_url", "hls")
 
         # `location` is a place name, which is exactly what an operator wants
         # to read on an alert. It is the camera's name, not its position.
@@ -235,7 +274,10 @@ async def sync(
             name=name,
             kind=CameraKind.IP,
             vendor="sentinel-grid",
-            protocol="rtsp",
+            # How ingest will actually decode this camera, which is the
+            # deployment's choice: RTSP off the gateway, or HLS off the CDN
+            # where 8554/TCP is closed.
+            protocol="hls" if settings.grid_prefer_hls else "rtsp",
             adapter_id=adapter_id,
             lat=float(position["lat"]),
             lon=float(position["lon"]),
@@ -271,7 +313,8 @@ async def sync(
                  WHERE id = $1
                 """,
                 adapter_id, camera_id,
-                {"rtsp_url": rtsp, "codec": codec, "width": width, "height": height,
+                {"rtsp_url": rtsp, "hls_url": hls, "codec": codec,
+                 "width": width, "height": height,
                  "declared_fps": declared_fps, "position_quality": quality},
             )
 

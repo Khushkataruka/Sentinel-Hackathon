@@ -116,7 +116,19 @@ def _preflight(camera_id: str, seconds: float, url: str | None, as_json: bool) -
     from sentinel.ingest.preflight import render, run
 
     if url:
-        handle = StreamHandle(camera_id, url, "tcp", options={"rtsp_transport": "tcp"})
+        # A URL typed on the command line is usually copied out of the guide
+        # without credentials on it. Attach the configured ones rather than
+        # letting the gateway refuse the connection.
+        from sentinel.core import streamurl
+        from sentinel.core.config import settings as _settings
+
+        if streamurl.is_rtsp(url):
+            url = streamurl.with_credentials(
+                url, _settings.grid_email, _settings.grid_password
+            )
+            handle = StreamHandle(camera_id, url, "tcp", options={"rtsp_transport": "tcp"})
+        else:
+            handle = StreamHandle(camera_id, url, "tcp")
     else:
         from sentinel.ingest.adapters.loader import discover
 

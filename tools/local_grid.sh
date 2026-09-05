@@ -70,8 +70,11 @@ EOF
   fi
 
   # nohup alone, no setsid: setsid does not exist on macOS.
-  nohup "$BIN" "$CONF" > "$HERE/var/mediamtx.log" 2>&1 < /dev/null &
-  MTX_PID=$!
+  # Launched from var/ on purpose: mediamtx writes a self-signed auto.crt and
+  # auto.key into its working directory, and those belong with the rest of the
+  # scratch state, not in the repo root next to the source.
+  ( cd "$HERE/var" && nohup "$BIN" "$CONF" > "$HERE/var/mediamtx.log" 2>&1 < /dev/null & )
+  MTX_PID=$(pgrep -n -f "mediamtx.*mediamtx.yml")
 
   # Wait for the port. Liveness is checked too, not just the port.
   ready=""

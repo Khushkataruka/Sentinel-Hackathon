@@ -36,12 +36,37 @@ class Settings(BaseSettings):
 
     # -- the Sentinel sandbox ---------------------------------------------
     # The catalogue is the contract; the URL pattern is not. We read
-    # {base}/api/ingest and take the URLs it gives us.
+    # {base}/cameras.json and take the URLs it gives us.
     sentinel_base_url: str = ""
-    sentinel_catalogue_path: str = "/api/ingest"
+    sentinel_catalogue_path: str = "/cameras.json"
+    #: Tried in order after catalogue_path 404s. The grid moved from
+    #: /api/ingest to /cameras.json; both estates exist in the wild and a
+    #: sync that dies on a renamed path is a bad trade for one list entry.
+    sentinel_catalogue_fallback_paths: list[str] = Field(
+        default_factory=lambda: ["/api/ingest"]
+    )
     sentinel_http_timeout: float = 15.0
     sentinel_token: str = ""
     sentinel_cookie: str = ""
+
+    # -- grid media plane --------------------------------------------------
+    # HLS comes off the CDN host in sentinel_base_url. RTSP and WebRTC cannot
+    # be proxied by a CDN, so they are served from the gateway's own address
+    # and authenticate every connection with the registered email and access
+    # password embedded in the URL. See sentinel.core.streamurl: the '@' in
+    # the email has to be percent-encoded, and a credentialed URL must never
+    # reach a log line, the adapters table or an API response.
+    grid_email: str = ""
+    grid_password: str = ""
+    #: Where RTSP and WHEP actually live. Empty means the catalogue's own
+    #: hostnames are already correct and should be left alone.
+    grid_media_host: str = "103.250.160.189"
+    grid_rtsp_port: int = 8554
+    grid_whep_port: int = 8889
+    #: Decode HLS off the CDN instead of RTSP off the gateway. For a machine
+    #: that cannot reach 8554/TCP -- the guide's own fallback. Costs latency
+    #: and a segment of buffering, so it is not the default.
+    grid_prefer_hls: bool = False
 
     # -- models ------------------------------------------------------------
     # A missing weights file degrades to a null implementation and a loud log
@@ -120,6 +145,16 @@ class Settings(BaseSettings):
     @property
     def sentinel_catalogue_url(self) -> str:
         return f"{self.sentinel_base_url.rstrip('/')}{self.sentinel_catalogue_path}"
+
+    def sentinel_catalogue_urls(self, base_url: str | None = None) -> list[str]:
+        """Every catalogue URL to try, in order, deduplicated."""
+        base = (base_url or self.sentinel_base_url).rstrip("/")
+        urls: list[str] = []
+        for path in [self.sentinel_catalogue_path, *self.sentinel_catalogue_fallback_paths]:
+            url = f"{base}/{path.lstrip('/')}"
+            if url not in urls:
+                urls.append(url)
+        return urls
 
 
 settings = Settings()

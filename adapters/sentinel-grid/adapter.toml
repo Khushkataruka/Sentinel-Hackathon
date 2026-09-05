@@ -1,13 +1,34 @@
 # The Gujarat Police Sentinel sandbox grid.
 #
-# Reads the catalogue at {base_url}/api/ingest and uses the stream URLs it
-# returns. Camera ids and the camera set change, so nothing here hardcodes an
-# endpoint -- the catalogue is the contract, the URL pattern is not.
+# Reads the catalogue at {base_url}/cameras.json and uses the stream URLs it
+# returns. Camera ids and the camera set change, so nothing here hardcodes a
+# camera -- the catalogue is the contract.
 #
-# base_url falls back to SENTINEL_SENTINEL_BASE_URL when omitted.
+# base_url falls back to SENTINEL_SENTINEL_BASE_URL when omitted, and the
+# catalogue itself needs a session (SENTINEL_SENTINEL_COOKIE or _TOKEN).
+#
+# The media host and ports below are topology, and may live in this file. The
+# RTSP credentials are not, and may not: RTSP authenticates every connection
+# with the registered email and access password, and those come only from
+# SENTINEL_GRID_EMAIL / SENTINEL_GRID_PASSWORD. An adapter folder gets copied
+# between machines and committed by accident; an environment does not.
 
 name   = "sentinel-grid"
 driver = "sentinel.ingest.adapters.builtin.sentinel_grid"
 
-# base_url = "http://<host>"
+# base_url = "https://cctv.corp8.cloud"
 timeout_s = 15.0
+
+# A CDN terminates HTTP and cannot proxy RTSP or WebRTC, so the media plane is
+# served from the gateway's own address. Left unset here on purpose: the
+# defaults are in settings, and a value in this file would then override the
+# environment rather than the other way round. Uncomment only to pin one
+# deployment to a different gateway. An empty media_host means the catalogue's
+# hostnames are already right and should be left alone.
+# media_host = "103.250.160.189"
+# rtsp_port  = 8554
+# whep_port  = 8889
+
+# Decode HLS off the CDN instead of RTSP off the gateway. Only where 8554/TCP
+# is blocked -- it costs latency and a segment of buffering.
+# prefer_hls = true
