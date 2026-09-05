@@ -43,6 +43,10 @@ async def _adapters() -> None:
             print(f"         {item.last_error}")
     try:
         await sync_to_registry(loaded)
+        print("\nadapter status written to the registry")
+    except Exception as exc:
+        print(f"\nnot recorded in the registry ({type(exc).__name__}); "
+              f"the results above are still valid")
     finally:
         await close_pool()
 

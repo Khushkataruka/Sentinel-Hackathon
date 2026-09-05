@@ -1,0 +1,17 @@
+name   = "local-grid"
+driver = "sentinel.ingest.adapters.builtin.rtsp"
+timeout_s = 5.0
+
+[[cameras]]
+camera_id = "CAM-A"
+name      = "Local test feed (H.264)"
+url       = "rtsp://127.0.0.1:8554/stream/CAM-A"
+lat       = 22.3000
+lon       = 70.8000
+
+[[cameras]]
+camera_id = "CAM-B"
+name      = "Local test feed (H.265)"
+url       = "rtsp://127.0.0.1:8554/stream/CAM-B"
+lat       = 22.3400
+lon       = 70.8600
