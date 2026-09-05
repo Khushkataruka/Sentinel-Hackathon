@@ -1,6 +1,8 @@
 # Local development uses uv; the stack itself runs in compose.
 UV      ?= uv
 COMPOSE ?= docker compose
+# Use the module when uv's standalone executable is not on PATH.
+UV_CMD  := $(if $(shell command -v $(UV) 2>/dev/null),$(UV),python3 -m uv)
 
 .DEFAULT_GOAL := help
 .PHONY: help install db-up db-down migrate seed test lint \
@@ -13,13 +15,13 @@ help:  ## Show this help
 
 # -- local ------------------------------------------------------------------
 install:  ## Sync the workspace into .venv
-	$(UV) sync --all-extras
+	$(UV_CMD) sync --all-extras
 
 test:  ## Run the test suite (DB-backed tests skip with no database)
-	$(UV) run pytest -q
+	$(UV_CMD) run pytest -q
 
 lint:  ## ruff
-	$(UV) run ruff check .
+	$(UV_CMD) run ruff check .
 
 # -- database ---------------------------------------------------------------
 db-up:  ## Start postgres (postgis + pgvector) only
