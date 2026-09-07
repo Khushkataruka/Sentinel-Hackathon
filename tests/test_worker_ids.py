@@ -36,20 +36,20 @@ def track(n):
 
 def test_scoped_ids_survive_a_reset():
     w = worker()
-    before = w._scoped_track_id(track(1))
+    before = w.scoped_track_id(track(1))
     w._epoch += 1
-    after = w._scoped_track_id(track(1))
+    after = w.scoped_track_id(track(1))
     assert before != after, "the same tracker id in two epochs must differ"
 
 
 def test_scoped_ids_are_stable_within_an_epoch():
     w = worker()
-    assert w._scoped_track_id(track(4)) == w._scoped_track_id(track(4))
+    assert w.scoped_track_id(track(4)) == w.scoped_track_id(track(4))
 
 
 def test_two_workers_on_one_camera_do_not_collide():
     """A restarted worker begins numbering at 1 again."""
-    assert worker()._scoped_track_id(track(1)) != worker()._scoped_track_id(track(1))
+    assert worker().scoped_track_id(track(1)) != worker().scoped_track_id(track(1))
 
 
 def test_no_scheduled_cut_without_a_measured_period():

@@ -7,7 +7,7 @@ UV_CMD  := $(if $(shell command -v $(UV) 2>/dev/null),$(UV),python3 -m uv)
 .DEFAULT_GOAL := help
 .PHONY: help install db-up db-down migrate seed test lint \
         build up down logs ps registry ingest pipelines correlation api \
-        sync survey preflight clean
+        sync survey preflight pipeline clean
 
 help:  ## Show this help
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -22,6 +22,11 @@ test:  ## Run the test suite (DB-backed tests skip with no database)
 
 lint:  ## ruff
 	$(UV_CMD) run ruff check .
+
+# -- video files in, annotated video out ------------------------------------
+pipeline:  ## One pass over video files. V="a.mp4 b.mp4", ARGS for the rest. See PIPELINE.md
+	@test -n "$(V)" || { echo 'usage: make pipeline V="a.mp4 b.mp4" [ARGS=--manifest\ videos.json]'; exit 2; }
+	./run_pipeline.sh $(ARGS) $(V)
 
 # -- database ---------------------------------------------------------------
 db-up:  ## Start postgres (postgis + pgvector) only

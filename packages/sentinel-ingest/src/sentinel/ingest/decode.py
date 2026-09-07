@@ -83,11 +83,19 @@ class CameraStream:
     processing a camera.
     """
 
-    def __init__(self, handle: StreamHandle, target_fps: float | None = None) -> None:
+    def __init__(
+        self,
+        handle: StreamHandle,
+        target_fps: float | None = None,
+        *,
+        once: bool = False,
+        fixed_epoch: datetime | None = None,
+    ) -> None:
         self.handle = handle
         self.camera_id = handle.camera_id
         self.target_fps = target_fps or settings.target_decode_fps
-        self.clock = PtsClock()
+        self.once = once
+        self.clock = PtsClock(fixed_epoch=fixed_epoch)
 
         self._cap: cv2.VideoCapture | None = None
         self._closed = False
@@ -196,7 +204,11 @@ class CameraStream:
         return False
 
     def frames(self) -> Iterator[Frame]:
-        """Yield decoded frames, forever, reconnecting underneath."""
+        """Yield decoded frames, reconnecting underneath.
+
+        Forever, unless `once` -- then the source is finite and the iterator
+        stops at its end.
+        """
         while not self._closed:
             if self._cap is None:
                 try:
@@ -204,12 +216,27 @@ class CameraStream:
                     self._backoff = settings.reconnect_backoff_initial_s
                 except DecodeError as exc:
                     log.warning("stream_open_failed", camera=self.camera_id, error=str(exc))
+                    if self.once:
+                        raise
                     self._reconnect()
                     continue
 
             ok, image = self._cap.read()   # type: ignore[union-attr]
 
             if not ok or image is None:
+                if self.once:
+                    # One pass over a finite source. A failed read at the end
+                    # of a file IS the end of the file -- there is nothing to
+                    # reconnect to. Ceiling: a mid-file decode error also ends
+                    # the pass rather than being skipped past. For a local
+                    # file that is the right trade, and stats() reports
+                    # frames_decoded so a truncated pass is visible. If a
+                    # damaged file ever needs to survive this, count
+                    # consecutive failures here the way the live path does.
+                    log.info("stream_eof", camera=self.camera_id,
+                             frames_decoded=self.frames_decoded)
+                    return
+
                 # A failed read is either a gap, a decoder warning at join, or
                 # a real disconnect. We cannot tell them apart from one read,
                 # so we count. Aborting on the first one is the mistake the

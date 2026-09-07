@@ -5,6 +5,13 @@
     sentinel-ingest adapters            load and test adapters, print results
     sentinel-ingest probe CAM-1         open one stream and report what arrives
     sentinel-ingest preflight CAM-1     measure a feed against the guide's checklist
+
+    sentinel-ingest offline a.mp4 b.mp4  one pass over files, into the database
+    sentinel-ingest annotate a.mp4       draw the result back onto the video
+
+The last two are the batch path: a file ends, a camera does not, so they exist
+to give a finite source a stop condition, a place, a time and a record of the
+per-frame geometry nothing else keeps. See ingest/offline.py.
 """
 
 from __future__ import annotations
@@ -15,6 +22,7 @@ import sys
 
 from sentinel.core.db import close_pool
 from sentinel.core.logging import configure_logging, get_logger
+from sentinel.ingest import offline as offline_mod
 
 log = get_logger(__name__)
 
@@ -171,6 +179,38 @@ def main(argv: list[str] | None = None) -> int:
     pre.add_argument("--url", default=None, help="bypass adapters, measure this URL")
     pre.add_argument("--json", action="store_true")
 
+    off = sub.add_parser(
+        "offline", help="decode video files once, writing sightings and track sidecars"
+    )
+    off.add_argument("videos", nargs="+", help="video files to ingest")
+    off.add_argument("--out", default="out", help="run directory (default: ./out)")
+    off.add_argument(
+        "--manifest", default=None,
+        help="JSON giving each video a camera_id, name, lat, lon and start_at",
+    )
+    off.add_argument(
+        "--keep-sightings", action="store_true",
+        help="add to previous runs instead of replacing them for these cameras",
+    )
+    off.add_argument(
+        "--leg-km", type=float, default=offline_mod.LEG_KM,
+        help="synthetic spacing between consecutive videos, km",
+    )
+    off.add_argument(
+        "--leg-seconds", type=float, default=offline_mod.LEG_SECONDS,
+        help="synthetic spacing between consecutive videos, seconds",
+    )
+
+    ann = sub.add_parser("annotate", help="render an annotated copy of a video")
+    ann.add_argument("videos", nargs="+")
+    ann.add_argument("--tracks", required=True, help="directory of track sidecars")
+    ann.add_argument("--out", required=True, help="directory for the annotated videos")
+    ann.add_argument("--correlations", default=None, help="correlations.json, for MATCH tags")
+    ann.add_argument(
+        "--fps", type=float, default=None,
+        help="must match the offline pass; defaults to SENTINEL_TARGET_DECODE_FPS",
+    )
+
     args = parser.parse_args(argv)
     configure_logging("ingest")
 
@@ -180,6 +220,18 @@ def main(argv: list[str] | None = None) -> int:
         asyncio.run(_adapters())
     elif args.command == "preflight":
         _preflight(args.camera_id, args.seconds, args.url, args.json)
+    elif args.command == "offline":
+        return offline_mod.main(
+            args.videos, args.out, args.manifest,
+            reset=not args.keep_sightings,
+            leg_km=args.leg_km, leg_seconds=args.leg_seconds,
+        )
+    elif args.command == "annotate":
+        from sentinel.ingest import annotate as annotate_mod
+
+        return annotate_mod.main(
+            args.videos, args.tracks, args.out, args.correlations, args.fps
+        )
     else:
         asyncio.run(_probe(args.camera_id, args.seconds))
     return 0

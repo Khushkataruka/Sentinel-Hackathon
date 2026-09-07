@@ -222,3 +222,7 @@ __marimo__/
 # still a private key, and a private key is never a commit.
 auto.crt
 auto.key
+
+# Batch runs. run_pipeline.sh writes ./out/<timestamp>/ unless --out says
+# otherwise: annotated video, track sidecars, correlation report.
+out/

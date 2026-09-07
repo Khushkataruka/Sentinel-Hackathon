@@ -38,9 +38,17 @@ class PtsClock:
     Args:
         discontinuity_s: a PTS step outside [0, this] is treated as a cut.
             Backwards steps always are.
+        fixed_epoch: pin the stream to a known instant instead of "now".
+            With it, wall = fixed_epoch + pts_s exactly, and that stays true
+            across re-anchors. A file has no wall clock of its own, and
+            anchoring it to the moment the decoder happened to open it puts
+            two files however many seconds apart the first one took to
+            process -- which turns every cross-camera route leg into an
+            impossible speed. Offline runs set it; live feeds never do.
     """
 
     discontinuity_s: float = field(default_factory=lambda: settings.pts_discontinuity_s)
+    fixed_epoch: datetime | None = None
 
     _anchor_wall: datetime | None = field(default=None, init=False)
     _anchor_pts_s: float | None = field(default=None, init=False)
@@ -59,6 +67,8 @@ class PtsClock:
     def anchor(self, pts_s: float, wall: datetime | None = None) -> None:
         """Pin this PTS to a wall-clock instant. Called on the first frame of
         a connection and again after any cut."""
+        if wall is None and self.fixed_epoch is not None:
+            wall = self.fixed_epoch + timedelta(seconds=pts_s)
         self._anchor_wall = wall or datetime.now(UTC)
         self._anchor_pts_s = pts_s
         self._last_pts_s = pts_s

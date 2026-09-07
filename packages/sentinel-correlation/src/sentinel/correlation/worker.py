@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import signal
+import time
 import uuid
 
 from sentinel.core import audit, outbox
@@ -38,7 +39,10 @@ SWEEP_INTERVAL_S = 30.0
 
 
 class CorrelationWorker:
-    def __init__(self) -> None:
+    def __init__(self, *, drain: bool = False) -> None:
+        #: Exit once the outbox is empty and nothing is still open. A batch
+        #: run has a last sighting; a live estate does not.
+        self.drain = drain
         self._stopping = asyncio.Event()
         self.correlated = 0
         self.timed_out = 0
@@ -122,16 +126,57 @@ class CorrelationWorker:
 
     # -- loop --------------------------------------------------------------
 
+    async def _quiet(self, waiting_since: float | None) -> bool:
+        """Nothing left to consume, and nothing still waiting to become
+        consumable.
+
+        An empty outbox alone is not enough: a sighting whose pipelines have
+        not all reported has no event yet and would be abandoned half-done.
+        Those are what the timeout sweep resolves, so a drain waits for them
+        too -- run the crop pipelines to completion first and this returns
+        true on the first check.
+
+        Bounded, though. A sighting can be left `open` with every pipeline
+        status already terminal and its outbox event consumed; the sweep only
+        moves rows that are still `pending`, so nothing would ever make it
+        ready and an unbounded wait would hang the batch forever on one bad
+        row. After correlation_timeout_s of an empty outbox this gives up and
+        says how many it left behind.
+        """
+        async with acquire() as conn:
+            open_rows = await conn.fetchval(
+                "SELECT count(*) FROM sightings WHERE state = $1",
+                SightingState.OPEN.value,
+            )
+        if not open_rows:
+            return True
+
+        waited = time.monotonic() - (waiting_since or time.monotonic())
+        if waited > settings.correlation_timeout_s:
+            log.warning(
+                "drain_gave_up_on_open_sightings",
+                open=open_rows, waited_s=round(waited, 1),
+                reason="the outbox is empty but these will never become ready",
+            )
+            return True
+        return False
+
     async def run(self) -> None:
         log.info("correlation_started", timeout_s=settings.correlation_timeout_s)
         sweep_task = asyncio.create_task(self._sweep_loop())
 
+        idle_since: float | None = None
         try:
             while not self._stopping.is_set():
                 async with acquire() as conn:
                     events = await outbox.claim(conn, limit=32)
 
                 if not events:
+                    idle_since = idle_since or time.monotonic()
+                    if self.drain and await self._quiet(idle_since):
+                        log.info("correlation_drained", correlated=self.correlated,
+                                 timed_out=self.timed_out)
+                        break
                     try:
                         await asyncio.wait_for(
                             self._stopping.wait(), timeout=settings.queue_poll_interval_s
@@ -140,6 +185,7 @@ class CorrelationWorker:
                         pass
                     continue
 
+                idle_since = None
                 for event in events:
                     if event["event"] == outbox.COMPLETE:
                         continue    # our own output; do not loop on it

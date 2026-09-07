@@ -15,6 +15,7 @@ import asyncio
 import time
 import uuid
 from collections import OrderedDict
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -65,11 +66,25 @@ class CameraWorker:
         adapter: Adapter,
         detector: Detector | None = None,
         detect_model_id: int | None = None,
+        *,
+        once: bool = False,
+        fixed_epoch: datetime | None = None,
+        observer: Callable[[Frame, list[Track], CameraWorker], None] | None = None,
     ) -> None:
         self.camera_id = camera_id
         self.adapter = adapter
         self.detector = detector or load_detector(detect_model_id)
         self.detect_model_id = detect_model_id
+
+        #: One pass over a finite source, then stop. Live cameras never end.
+        self.once = once
+        #: Pin the stream's timestamps to a known instant. See PtsClock.
+        self.fixed_epoch = fixed_epoch
+        #: Called after every tracker update with the live tracks. The
+        #: per-frame boxes exist nowhere else -- `sightings` keeps one box per
+        #: track, the best one -- so anything that needs to replay a frame's
+        #: geometry has to take it here or not at all.
+        self.observer = observer
 
         self.gating: writer.Gating | None = None
         self.tracker: ByteTrack | None = None
@@ -85,6 +100,7 @@ class CameraWorker:
         self._detections_since_health = 0
         self._last_health = 0.0
         self._stopping = False
+        self._last_frame: Frame | None = None
 
         # sightings has UNIQUE (camera_id, track_id), and the tracker numbers
         # its tracks from 1 and starts again at every reset -- at each loop
@@ -131,8 +147,12 @@ class CameraWorker:
 
     # -- frame handling ----------------------------------------------------
 
-    def _scoped_track_id(self, track: Track) -> str:
+    def scoped_track_id(self, track: Track) -> str:
         """A track id unique to this camera for all time.
+
+        Public because it is the join key between a live track and the
+        sighting it will eventually become -- an observer watching frames go
+        past has no other way to name the thing it is drawing.
 
         `<run>:<epoch>:<n>` -- the run token distinguishes worker restarts,
         the epoch distinguishes the segments between scene cuts, and n is the
@@ -230,7 +250,7 @@ class CameraWorker:
                         conn,
                         read_id=read_id,
                         camera_id=self.camera_id,
-                        track_id=self._scoped_track_id(track),
+                        track_id=self.scoped_track_id(track),
                         seen_at=seen_at,
                         track_start_at=at_pts(track.start_pts_s),
                         track_end_at=at_pts(track.last_pts_s),
@@ -309,7 +329,10 @@ class CameraWorker:
 
         assert self.gating is not None and self.tracker is not None
         self.stream = CameraStream(
-            handle, target_fps=self.gating.decode_fps or settings.target_decode_fps
+            handle,
+            target_fps=self.gating.decode_fps or settings.target_decode_fps,
+            once=self.once,
+            fixed_epoch=self.fixed_epoch,
         )
         loop = asyncio.get_running_loop()
         frame_iter = self.stream.frames()
@@ -340,8 +363,11 @@ class CameraWorker:
                 )
                 self._detections_since_health += len(detections)
                 self._cache_frame(frame)
+                self._last_frame = frame
 
-                _, finished = self.tracker.update(detections, frame.dt_s, frame.pts_s)
+                active, finished = self.tracker.update(detections, frame.dt_s, frame.pts_s)
+                if self.observer is not None:
+                    self.observer(frame, active, self)
                 if finished:
                     await self._flush_tracks(finished, frame)
 
@@ -383,6 +409,14 @@ class CameraWorker:
 
                 if time.monotonic() - self._last_health > HEALTH_INTERVAL_S:
                     await self._post_health(reachable=True)
+
+            # The loop above ended because the source did. Vehicles still on
+            # screen at the last frame have live tracks and no sighting yet;
+            # on a live camera they would be written when the track finally
+            # goes unmatched, but there are no more frames. Flush them, or
+            # every video silently loses whatever was crossing at the end.
+            if self.once and self._last_frame is not None:
+                await self._flush_tracks(self.tracker.reset(), self._last_frame)
 
         except asyncio.CancelledError:
             raise

@@ -365,3 +365,16 @@ arithmetic, and adapter loading including a deliberately broken adapter.
 Drop `.mp4` files into `var/samples/` and the `sample-files` adapter picks
 them up. A looping file produces the same hard scene cut the live grid does,
 which makes it the honest way to test discontinuity handling.
+
+For a fixed set of files rather than a standing feed there is a batch path,
+which runs the same code with a stop condition and draws the result back onto
+the video:
+
+```bash
+./run_pipeline.sh clip1.mp4 clip2.mp4        # or: make pipeline V="clip1.mp4 clip2.mp4"
+```
+
+Annotated video per input, `correlations.json` and a standalone `report.html`
+for anything seen by more than one camera. **[PIPELINE.md](PIPELINE.md)** is
+the runbook: what you must supply, what every component does, and exactly
+where each model file goes.

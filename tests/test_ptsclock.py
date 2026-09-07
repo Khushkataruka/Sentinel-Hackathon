@@ -95,3 +95,37 @@ def test_measured_fps_ignores_the_declared_rate():
     for i in range(11):
         clock.observe(i * 0.1)
     assert abs(clock.measured_fps() - 10.0) < 0.01
+
+
+def test_fixed_epoch_pins_a_file_to_a_known_instant():
+    """A file has no wall clock of its own.
+
+    Without this, two videos ingested back to back land however many seconds
+    apart the first one took to process, and every cross-camera route leg
+    computes a speed from that accident.
+    """
+    epoch = datetime(2026, 9, 7, 9, 0, 0, tzinfo=UTC)
+    clock = PtsClock(fixed_epoch=epoch)
+
+    first, _, _ = clock.observe(0.0)
+    assert first == epoch
+
+    later, _, _ = clock.observe(3.25)
+    assert (later - epoch).total_seconds() == 3.25
+
+
+def test_fixed_epoch_survives_a_loop_cut():
+    """Re-anchoring must stay on the epoch, not jump to now().
+
+    A looping file cuts mid-pass; if the cut re-anchored to wall clock the
+    second half of the video would be timestamped hours from the first.
+    """
+    epoch = datetime(2026, 9, 7, 9, 0, 0, tzinfo=UTC)
+    clock = PtsClock(fixed_epoch=epoch)
+
+    clock.observe(0.0)
+    clock.observe(19.9)
+    after_cut, _, cut = clock.observe(0.1)      # backwards: the loop point
+
+    assert cut is True
+    assert (after_cut - epoch).total_seconds() == 0.1

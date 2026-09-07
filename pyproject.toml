@@ -14,6 +14,18 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "pytest-asyncio>=0.24", "ruff>=0.6", "httpx>=0.27"]
+# What it takes to RUN an ONNX model. Small, and enough for the whole platform
+# once the .onnx files exist. Declared here and not only on the
+# ingest/pipelines packages because `uv sync --all-extras` resolves ROOT
+# extras -- a workspace member's extra is never picked up by it, which is why
+# onnxruntime was missing from a freshly synced .venv.
+models = ["onnxruntime>=1.18"]
+# What it takes to MAKE one: ultralytics, which pulls torch, which is a couple
+# of gigabytes. Kept separate because someone who already has a yolo.onnx
+# should never have to download a training framework to run it.
+export = ["ultralytics>=8.2"]
+# The ANPR path: ultralytics for the plate detector, easyocr for the reader.
+anpr = ["ultralytics>=8.2", "easyocr>=1.7"]
 
 [tool.uv.workspace]
 members = ["packages/*"]

@@ -37,8 +37,12 @@ class PipelineWorker(abc.ABC):
     pipeline: Pipeline
     model_role: str | None = None
 
-    def __init__(self, concurrency: int = 1) -> None:
+    def __init__(self, concurrency: int = 1, *, drain: bool = False) -> None:
         self.concurrency = concurrency
+        #: Exit when the queue comes back empty instead of waiting for more.
+        #: A batch run over a fixed set of videos has a last job; a live
+        #: estate does not.
+        self.drain = drain
         self.model_id: int | None = None
         self._stopping = asyncio.Event()
         self.processed = 0
@@ -152,6 +156,10 @@ class PipelineWorker(abc.ABC):
                 jobs = await queue.claim(conn, self.pipeline)
 
             if not jobs:
+                if self.drain:
+                    log.info("pipeline_drained", pipeline=self.pipeline.value,
+                             processed=self.processed, failed=self.failed)
+                    break
                 try:
                     await asyncio.wait_for(
                         self._stopping.wait(), timeout=settings.queue_poll_interval_s
