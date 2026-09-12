@@ -26,6 +26,7 @@ from typing import Any
 
 import numpy as np
 from sentinel.core import media, queue
+from sentinel.core.config import settings
 from sentinel.core.logging import get_logger
 from sentinel.core.types import Pipeline, PipelineStatus, ReviewStatus
 from sentinel.pipelines.base import PipelineWorker
@@ -78,6 +79,19 @@ class ViolateWorker(PipelineWorker):
             await self._set_status(conn, job.read_id, PipelineStatus.SKIPPED)
             return {"skipped": f"no permitted type applies to {vehicle_class}"}
 
+        # A crop too small to resolve a helmet cannot be assessed at all, and
+        # two detector passes over it cost half a second to produce a zero.
+        # Skipped rather than done, because "too small to judge" and "judged,
+        # nothing found" are different claims -- the same distinction the
+        # helmet verdict's None draws for one rider.
+        # Only the real detectors care: a stub never looks at the pixels, and
+        # gating it here would empty the review queue on the sample footage.
+        height, width = crop.shape[:2]
+        if not self.detector.is_stub and max(height, width) < settings.violation_min_crop_px:
+            await self._set_status(conn, job.read_id, PipelineStatus.SKIPPED)
+            return {"skipped": f"crop {width}x{height} under "
+                               f"{settings.violation_min_crop_px}px"}
+
         sighting = await conn.fetchrow(
             "SELECT seen_at, track_start_at, track_end_at FROM sightings WHERE read_id = $1",
             job.read_id,
@@ -109,6 +123,10 @@ class ViolateWorker(PipelineWorker):
                 "track_start_pts": None,
                 "track_end_pts": None,
                 "riders": len(riders),
+                # The boxes themselves, so the violation detector can read the
+                # helmet verdicts off them instead of running the helmet
+                # weights a second time on the same crop.
+                "rider_boxes": riders,
             },
         )
 

@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """Record provisional camera profiles.
 
-A synced camera permits nothing until a survey is recorded, so a fresh stack
-produces sightings with every pipeline marked 'skipped'. That is the intended
-order, but it looks broken. This writes a profile that lets describe and embed
-run.
+A synced camera is already granted every capability by the registry's
+defaults, so this no longer exists to unblock the pipelines. It remains the
+way to stamp a row as provisional and to record a measured loop period.
 
-It is not the section 6 survey. permitted_violations stays empty and
-plate_viable stays false: those need a camera measured for them, and the
-database trigger will refuse a violation type that was not. trust_level
-inherits whatever the sync recorded from coordinate quality.
+It is not the section 6 survey. The four capability fields --
+permitted_attributes, permitted_violations, plate_viable, density_viable --
+are omitted from the request on purpose, so the registry applies the same
+full grant every other write path gets and this script holds no second copy
+of the lists. trust_level inherits whatever the sync recorded from coordinate
+quality.
 
 Use --loop-period to record what `sentinel-ingest preflight` measured.
 
@@ -27,14 +28,6 @@ import urllib.error
 import urllib.request
 
 DEFAULT_REGISTRY = "http://localhost:8000"
-
-# Colour and type survive reduced resolution; make does not, so it is only
-# claimed where the frame is large enough to have a chance.
-ATTRIBUTES = {
-    "full": ["colour", "type", "make"],
-    "reduced": ["colour", "type"],
-    "thumbnail": ["colour"],
-}
 
 
 MISSING = object()
@@ -115,11 +108,10 @@ def main() -> int:
         resolution = (existing or {}).get("resolution_class", "thumbnail")
 
         profile = {
+            # permitted_attributes, permitted_violations, plate_viable and
+            # density_viable are omitted: the registry's defaults grant them
+            # all, and repeating the lists here would give them two homes.
             "resolution_class": resolution,
-            "permitted_attributes": ATTRIBUTES.get(resolution, ["colour"]),
-            "permitted_violations": [],
-            "plate_viable": False,
-            "density_viable": False,
             "decode_fps": (existing or {}).get("decode_fps"),
             "trust_level": (existing or {}).get("trust_level", 0.5),
             "loop_period_s": args.loop_period or (existing or {}).get("loop_period_s"),
@@ -132,7 +124,7 @@ def main() -> int:
               f"trust={result['trust_level']:<5} loop={result.get('loop_period_s')}")
 
     print(f"\n{len(targets)} provisional profile(s) written. "
-          "Violations and plates stay off until a real survey.")
+          "Violations and plates are on: the grant is the default, not a survey.")
     return 0
 
 

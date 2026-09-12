@@ -14,6 +14,10 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 from sentinel.core.types import (
+    ALL_ATTRIBUTES,
+    ALL_VIOLATIONS,
+    DENSITY_VIABLE_BY_DEFAULT,
+    PLATE_VIABLE_BY_DEFAULT,
     AdapterStatus,
     AlertStatus,
     AlertTier,
@@ -66,14 +70,25 @@ class Camera(CameraIn):
 
 
 class CameraProfileIn(Base):
-    """Output of the section 6 survey. This row decides what a camera is
-    allowed to claim -- every pipeline gate reads it."""
+    """What a camera is allowed to claim -- every pipeline gate reads it.
+
+    The defaults grant everything. A profile that omits these fields permits
+    the full attribute set, ANPR and every violation type; see
+    ALL_ATTRIBUTES in sentinel.core.types for what that implies.
+
+    resolution_class stays THUMBNAIL because it is a measurement, not a
+    permission, and it is the *permissive* end of the one gate that reads it:
+    reid.MIN_CROP_PIXELS accepts a 24x24 crop at thumbnail against 64x64 at
+    full, so raising it would reject crops, not admit them.
+    """
 
     resolution_class: ResolutionClass = ResolutionClass.THUMBNAIL
-    permitted_attributes: list[str] = Field(default_factory=list)
-    permitted_violations: list[str] = Field(default_factory=list)
-    plate_viable: bool = False
-    density_viable: bool = False
+    permitted_attributes: list[str] = Field(
+        default_factory=lambda: list(ALL_ATTRIBUTES))
+    permitted_violations: list[str] = Field(
+        default_factory=lambda: list(ALL_VIOLATIONS))
+    plate_viable: bool = PLATE_VIABLE_BY_DEFAULT
+    density_viable: bool = DENSITY_VIABLE_BY_DEFAULT
     lane_polygon_wkt: str | None = None
     lane_count: int | None = Field(None, gt=0)
     decode_fps: float | None = None

@@ -82,12 +82,9 @@ This reads `{base}/cameras.json` — falling back to the older `/api/ingest`
 — and upserts every camera it lists. Camera ids are theirs; the catalogue is
 the contract, so a URL is only constructed when an entry omits one.
 
-Synced cameras arrive with a **provisional profile that permits nothing**.
-They will produce sightings with every pipeline marked `skipped` until a
-survey is recorded against them. That is the intended order, not a bug —
-capability comes from measurement, and the measurement involves photographing
-a windscreen.
-
+Synced cameras arrive with a **provisional profile that permits everything** —
+the full attribute set, ANPR, and every violation type — so all four pipelines
+run from the moment a camera is onboarded, with no survey.
 ```bash
 curl -X PUT localhost:8000/cameras/CAM-1/profile \
   -H 'X-Sentinel-User: admin' -H 'Content-Type: application/json' \
@@ -341,9 +338,11 @@ These are deliberate and enforced, not missing.
 - **No single answer.** Searches return every physically consistent route,
   ranked, with the competing count visible. If enumeration hits the cap the
   count is marked as a floor rather than passed off as a total.
-- **No claiming a capability that was not measured.** A database trigger
-  refuses a violation type the camera's survey does not permit. The pipeline
-  does not pre-check it — a rejected insert is the design working.
+- ~~**No claiming a capability that was not measured.**~~ Withdrawn. Every
+  camera is granted every capability by default (`005_default_all_permissions`),
+  so the trigger that refuses an unpermitted violation type now passes for
+  every type on every camera. It still rejects a code absent from
+  `violation_types`, which is all that remains of this guarantee.
 
 ---
 

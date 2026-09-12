@@ -122,3 +122,43 @@ DONE_EVENT: dict[Pipeline, str] = {
     Pipeline.PLATE: "plate_done",
     Pipeline.VIOLATE: "violation_done",
 }
+
+
+# ---------------------------------------------------------------------------
+# Default capability grant
+# ---------------------------------------------------------------------------
+#
+# Every camera is granted everything by default. This deliberately replaces
+# the "nothing until surveyed" rule the registry started with: a camera now
+# claims the full attribute set, ANPR and every violation type from the
+# moment it is onboarded, without a section 6 survey.
+#
+# Consequences worth knowing, since nothing downstream re-checks them:
+#   - `red_light` and `wrong_way` need a stop line and lane geometry. No
+#     camera in the estate has `lane_polygon` or `lane_count`, so these fire
+#     on scene context that was never measured.
+#   - `no_seatbelt` and `phone_use` need glass penetration at pole distance.
+#     They have no auto_confirm_threshold, so they still route to a human.
+#   - DENSITY_VIABLE_BY_DEFAULT does not conjure lane geometry: traffic.py
+#     still needs lane_length_m before it emits density_vpkm.
+#
+# ALL_VIOLATIONS must stay equal to the enabled rows in `violation_types`.
+# test_default_permissions.py checks that against a live database.
+
+#: Every field `Description.restrict_to` can keep. 'type' is the profile's
+#: spelling of the sightings column `vtype`.
+ALL_ATTRIBUTES: list[str] = ["colour", "type", "make", "model", "features"]
+
+#: Every `violation_types.code` seeded by 001_schema.sql.
+ALL_VIOLATIONS: list[str] = [
+    "illegal_parking",
+    "no_helmet",
+    "no_seatbelt",
+    "phone_use",
+    "red_light",
+    "triple_riding",
+    "wrong_way",
+]
+
+PLATE_VIABLE_BY_DEFAULT = True
+DENSITY_VIABLE_BY_DEFAULT = True

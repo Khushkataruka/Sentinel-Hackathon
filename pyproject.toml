@@ -26,6 +26,9 @@ models = ["onnxruntime>=1.18"]
 export = ["ultralytics>=8.2"]
 # The ANPR path: ultralytics for the plate detector, easyocr for the reader.
 anpr = ["ultralytics>=8.2", "easyocr>=1.7"]
+# The rider/helmet and phone detectors, which are ultralytics .pt weights run
+# straight rather than exported. Same framework as anpr, no OCR.
+violations = ["ultralytics>=8.2"]
 
 [tool.uv.workspace]
 members = ["packages/*"]

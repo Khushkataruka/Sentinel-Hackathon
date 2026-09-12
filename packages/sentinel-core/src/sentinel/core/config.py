@@ -86,6 +86,21 @@ class Settings(BaseSettings):
     plate_detect_model_path: Path = Path("./var/models/plate_detect.onnx")
     plate_ocr_model_path: Path = Path("./var/models/plate_ocr.onnx")
 
+    #: Rider/helmet and phone detectors. Ultralytics .pt, run over the vehicle
+    #: crop rather than the frame -- see pipelines/models/violations.py.
+    helmet_model_path: Path = Path("./var/models/helmet_merged_yolo11m_best.pt")
+    phone_model_path: Path = Path("./var/models/phone_v2_yolo11m_best.pt")
+    helmet_conf: float = 0.35
+    phone_conf: float = 0.30
+    #: 'cpu', 'mps', or a CUDA index as a string. See the throughput note in
+    #: pipelines/models/violations.py before changing it.
+    violation_device: str = "cpu"
+    #: Longest crop side, in pixels, below which no violation is assessable.
+    #: A helmet is a fraction of a rider box; under roughly this the weights
+    #: (trained at 640) have nothing to resolve. The 480x360 sample footage
+    #: sits entirely below it, which is why that run reports skipped.
+    violation_min_crop_px: int = 96
+
     embedding_dim: int = 512       # MUST equal sightings.embedding's declared dim
     caption_embedding_dim: int = 384
 

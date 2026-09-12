@@ -39,11 +39,12 @@ Three things about that shape drive everything below.
    having onboarded nothing. Positions are therefore looked up by a
    canonical id -- see _canonical_id -- so a survey outlives a rename.
 
-The catalogue reports resolution and codec. It does NOT decide capability:
-plate_viable, density_viable and permitted_violations all stay false and
-empty until the section 6 survey says otherwise, because those are
-measurements involving a photograph of a windscreen, not fields in a JSON
-document.
+The catalogue reports resolution and codec, and a synced camera is granted
+every capability immediately: plate_viable, density_viable and the full
+permitted_attributes and permitted_violations sets come from the
+CameraProfileIn defaults, without a section 6 survey. The catalogue's JSON
+does not measure any of them -- plate and windscreen viability are properties
+of optics and pole geometry -- so these are asserted, not established.
 """
 
 from __future__ import annotations
@@ -291,10 +292,10 @@ async def sync(
                 resolution_class=_resolution_class(
                     int(width) if width else None, int(height) if height else None
                 ),
-                permitted_attributes=[],     # nothing until surveyed
-                permitted_violations=[],     # nothing until surveyed
-                plate_viable=False,
-                density_viable=False,
+                # A synced camera is granted everything, unsurveyed:
+                # permitted_attributes, permitted_violations, plate_viable and
+                # density_viable are left to the CameraProfileIn defaults on
+                # purpose, so the grant has one place to change.
                 # A decoder hint only. The declared rate does not match the
                 # delivery rate, and nothing time-derived may read it.
                 decode_fps=min(float(declared_fps), settings.target_decode_fps)
