@@ -7,6 +7,7 @@ from sentinel.registry.routers import (
     imports,
     profiles,
     queues,
+    stream_proxy,
 )
 
 ROUTERS = [
@@ -18,4 +19,6 @@ ROUTERS = [
     access.router,
     imports.router,
     queues.router,
+    stream_proxy.router,
 ]
+

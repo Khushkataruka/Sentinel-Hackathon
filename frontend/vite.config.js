@@ -26,7 +26,8 @@ export default defineConfig({
       '/queues': 'http://localhost:8000',
       '/health': 'http://localhost:8000',
       '/import': 'http://localhost:8000',
-      '/sync': 'http://localhost:8000'
+      '/sync': 'http://localhost:8000',
+      '/stream': 'http://localhost:8000'
     }
   }
 })

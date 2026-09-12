@@ -24,18 +24,35 @@ scripts/migrate.py   applies migrations in order, once each
 scripts/survey.py    provisional camera profiles, so pipelines are not all skipped
 docker/              postgres image, nginx config, container adapter set
 adapters/            drop-in adapter folders
-frontend/            React control room
+frontend/            React control room (Map, Admin, Camera Onboarding Modal, HLS Video Player)
 packages/
   sentinel-core         config, db, types, queue, outbox, audit, media
-  sentinel-registry     FastAPI :8000 — cameras, profiles, adapters, health
-  sentinel-ingest       decode, detect, track, sighting stubs, traffic buckets
-  sentinel-pipelines    describe, embed, plate, violate
+  sentinel-registry     FastAPI :8000 — cameras, profiles, adapters, health, HLS stream proxy
+  sentinel-ingest       decode, detect, track, sighting stubs, traffic buckets, YOLO ONNX export
+  sentinel-pipelines    describe, embed, plate, violate, ANPR fallback
   sentinel-correlation  candidates, routes, scoring, watchlist, alerts
   sentinel-api          FastAPI :8001 — map, search, alerts, traffic, evidence
 ```
 
 All six install into the `sentinel.*` namespace, so imports do not care which
 package a module came from.
+
+---
+
+## New Features & Recent Updates
+
+### 1. Interactive Camera Onboarding Modal
+Operators can now onboard new CCTV cameras directly from the UI on both the **Admin Dashboard** and **Interactive Map View**:
+- **Metadata Fields**: Camera ID, Name, Department mapping, Kind (`fixed`/`ptz`), Latitude, and Longitude.
+- **Auto-Survey Capability**: Includes an auto-survey option (`resolution_class: "full"`, `plate_viable: true`, `trust_level: 0.9`) so newly onboarded cameras immediately transition to active status and display on the control room map.
+
+### 2. Live HLS Video Stream Proxy & Player
+- **Registry Proxy**: `/cameras/{camera_id}/stream/index.m3u8` streams camera feeds directly through `sentinel-registry` using `stream_proxy.py`.
+- **Map Hover Player**: Hovering over camera markers on the map dynamically opens an HLS video player popup (`frontend/src/components/VideoPlayer.jsx`) with smooth playback via `hls.js`.
+
+### 3. Real YOLO ONNX Detection & ANPR Database Pipeline
+- **YOLO ONNX Engine**: Model exported to `var/models/yolo.onnx` for real object detection and tracking.
+- **ANPR & Database Writes**: Video frame pipeline extracts vehicle tracks, license plate text (OCR), vehicle features, and violation events directly into PostgreSQL (`sightings`, `vehicle_features`, `violations`).
 
 ---
 

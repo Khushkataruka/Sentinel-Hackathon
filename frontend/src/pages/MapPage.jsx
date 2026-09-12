@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
 import { api } from '../api.js'
+import VideoPlayer from '../components/VideoPlayer.jsx'
+import OnboardCameraModal from '../components/OnboardCameraModal.jsx'
 
 // Gujarat, roughly centred.
 const CENTRE = [22.3, 71.5]
@@ -23,24 +25,54 @@ function colourFor(camera) {
 export default function MapPage() {
   const [cameras, setCameras] = useState([])
   const [error, setError] = useState(null)
+  const [showOnboardModal, setShowOnboardModal] = useState(false)
+
+  const fetchCameras = () => {
+    api.cameras().then(setCameras).catch((e) => setError(e.message))
+  }
 
   useEffect(() => {
-    api.cameras().then(setCameras).catch((e) => setError(e.message))
+    fetchCameras()
   }, [])
 
   const unsurveyed = cameras.filter((c) => !c.surveyed).length
 
   return (
     <>
-      <div className="panel row">
-        <strong>{cameras.length}</strong> cameras
-        {unsurveyed > 0 && (
-          <span className="warn">
-            {unsurveyed} not yet surveyed — they produce nothing until they are
-          </span>
-        )}
-        {error && <span className="warn">{error}</span>}
+      <div className="panel row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <strong>{cameras.length}</strong> cameras
+          {unsurveyed > 0 && (
+            <span className="warn">
+              {unsurveyed} not yet surveyed — they produce nothing until they are
+            </span>
+          )}
+          {error && <span className="warn">{error}</span>}
+        </div>
+        <button
+          onClick={() => setShowOnboardModal(true)}
+          style={{
+            padding: '6px 14px',
+            borderRadius: '6px',
+            border: 'none',
+            background: 'linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%)',
+            color: '#fff',
+            fontWeight: 600,
+            fontSize: '0.85rem',
+            cursor: 'pointer',
+            boxShadow: '0 2px 8px rgba(79,70,229,0.3)',
+            transition: 'all 0.2s ease'
+          }}
+        >
+          + Onboard Camera
+        </button>
       </div>
+
+      <OnboardCameraModal
+        isOpen={showOnboardModal}
+        onClose={() => setShowOnboardModal(false)}
+        onSuccess={fetchCameras}
+      />
 
       <MapContainer center={CENTRE} zoom={7} className="map">
         <TileLayer
@@ -53,26 +85,32 @@ export default function MapPage() {
             <CircleMarker
               key={c.camera_id}
               center={[c.lat, c.lon]}
-              radius={6}
-              pathOptions={{ color: colourFor(c), fillOpacity: 0.8 }}
+              radius={7}
+              pathOptions={{ color: colourFor(c), fillOpacity: 0.85 }}
+              eventHandlers={{
+                mouseover: (e) => {
+                  e.target.openPopup()
+                },
+              }}
             >
-              <Popup>
-                <strong>{c.name}</strong>
-                <br />
-                {c.camera_id} · {c.department_code} · {c.kind}
-                <br />
-                {c.surveyed ? (
-                  <>
-                    trust {c.trust_level} · plates{' '}
-                    {c.plate_viable ? 'yes' : 'no'} · density{' '}
-                    {c.density_viable ? 'yes' : 'no'}
-                  </>
-                ) : (
-                  <em>not surveyed</em>
-                )}
-                <br />
-                health: {c.verdict || 'unknown'}
-                {c.detections_1h != null && ` · ${c.detections_1h} detections/h`}
+              <Popup minWidth={290}>
+                <VideoPlayer cameraId={c.camera_id} title={c.name} />
+                <div style={{ marginTop: '8px', fontSize: '12px', color: '#475569' }}>
+                  <strong>ID:</strong> {c.camera_id} · <strong>Dept:</strong> {c.department_code} · <strong>Kind:</strong> {c.kind}
+                  <br />
+                  {c.surveyed ? (
+                    <>
+                      <strong>Trust:</strong> {c.trust_level} · <strong>Plates:</strong>{' '}
+                      {c.plate_viable ? 'yes' : 'no'} · <strong>Density:</strong>{' '}
+                      {c.density_viable ? 'yes' : 'no'}
+                    </>
+                  ) : (
+                    <em>not surveyed</em>
+                  )}
+                  <br />
+                  <strong>Health:</strong> {c.verdict || 'unknown'}
+                  {c.detections_1h != null && ` · ${c.detections_1h} det/h`}
+                </div>
               </Popup>
             </CircleMarker>
           ))}
@@ -80,3 +118,4 @@ export default function MapPage() {
     </>
   )
 }
+
