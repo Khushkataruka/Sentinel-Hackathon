@@ -50,6 +50,23 @@ def test_plate_validation_invalid_formats():
     assert not anpr.validate("GJ01AB1234XYZ")
 
 
+def test_enable_validation_global_flag_toggle():
+    original_val = anpr.ENABLE_VALIDATION
+    try:
+        anpr.ENABLE_VALIDATION = False
+        # When validation is turned off, raw non-conforming or foreign plates return True
+        assert anpr.validate("RAW_TEXT_123")
+        assert anpr.validate("CUSTOM-PLATE")
+        assert anpr.validate("NY-492-ABC")
+        assert not anpr.validate("")  # empty still false
+
+        anpr.ENABLE_VALIDATION = True
+        assert not anpr.validate("RAW_TEXT_123")
+        assert not anpr.validate("CUSTOM-PLATE")
+    finally:
+        anpr.ENABLE_VALIDATION = original_val
+
+
 def test_stub_plate_reader_structure():
     reader = anpr.StubPlateReader()
     assert reader.is_stub is True

@@ -38,6 +38,12 @@ STATE_CODES = {
 }
 
 
+#: Global configuration flag to enable or disable license plate format validation.
+#: When True (default), OCR output is sanitized and validated against Indian registration formats.
+#: When False, format validation is bypassed, outputting the raw OCR output.
+ENABLE_VALIDATION: bool = False
+
+
 @dataclass
 class PlateRead:
     text: str
@@ -48,6 +54,8 @@ class PlateRead:
 
 
 def validate(text: str) -> bool:
+    if not ENABLE_VALIDATION:
+        return bool(text and str(text).strip())
     cleaned = re.sub(r"[^A-Z0-9]", "", text.upper())
     if len(cleaned) < 6:
         return False
@@ -217,17 +225,21 @@ class PyTorchPlateReader:
                     return (min(p[1] for p in pts), min(p[0] for p in pts))
 
                 sorted_items = sorted(valid_items, key=_sort_key)
-                combined_clean = "".join(
-                    re.sub(r"[^A-Z0-9]", "", str(it[1]).upper()).strip() for it in sorted_items
-                )
-                if combined_clean and combined_clean not in seen_texts:
-                    seen_texts.add(combined_clean)
+                if ENABLE_VALIDATION:
+                    combined_text = "".join(
+                        re.sub(r"[^A-Z0-9]", "", str(it[1]).upper()).strip() for it in sorted_items
+                    )
+                else:
+                    combined_text = " ".join(str(it[1]).strip() for it in sorted_items).strip()
+
+                if combined_text and combined_text not in seen_texts:
+                    seen_texts.add(combined_text)
                     avg_prob = float(np.mean([float(it[2]) for it in sorted_items]))
                     combined_conf = round(lp_score * avg_prob, 4)
-                    is_valid = validate(combined_clean)
+                    is_valid = validate(combined_text)
                     reads.append(
                         PlateRead(
-                            text=combined_clean,
+                            text=combined_text,
                             confidence=combined_conf,
                             rank=len(reads) + 1,
                             valid_format=is_valid,
@@ -238,16 +250,20 @@ class PyTorchPlateReader:
             # Also check individual OCR tokens
             for item in valid_items:
                 raw_text, ocr_prob = item[1], float(item[2])
-                clean_text = re.sub(r"[^A-Z0-9]", "", str(raw_text).upper()).strip()
-                if not clean_text or clean_text in seen_texts:
+                if ENABLE_VALIDATION:
+                    candidate_text = re.sub(r"[^A-Z0-9]", "", str(raw_text).upper()).strip()
+                else:
+                    candidate_text = str(raw_text).strip()
+
+                if not candidate_text or candidate_text in seen_texts:
                     continue
 
-                seen_texts.add(clean_text)
+                seen_texts.add(candidate_text)
                 combined_conf = round(lp_score * ocr_prob, 4)
-                is_valid = validate(clean_text)
+                is_valid = validate(candidate_text)
                 reads.append(
                     PlateRead(
-                        text=clean_text,
+                        text=candidate_text,
                         confidence=combined_conf,
                         rank=len(reads) + 1,
                         valid_format=is_valid,

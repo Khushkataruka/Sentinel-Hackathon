@@ -1,4 +1,4 @@
-﻿# Automated Number Plate Recognition (ANPR) Pipeline Documentation
+# Automated Number Plate Recognition (ANPR) Pipeline Documentation
 
 ## 1. Overview & Architecture
 
@@ -76,13 +76,18 @@ flowchart TD
    - In India, many plates are 2-line (e.g., `GJ01` on row 1, `AB1234` on row 2).
    - The OCR reader joins multi-box tokens in spatial reading order (top-to-bottom, left-to-right) as well as evaluating single lines.
 
-5. **Format Validation (`validate()`)**:
-   - Characters are sanitized to uppercase alphanumeric (`[^A-Z0-9]`).
-   - Validated against Indian registration formats:
-     - **Modern**: `^[A-Z]{2}\d{1,2}[A-Z]{1,3}\d{4}$` (e.g., `GJ01AB1234`, `DL03CAA1234`)
-     - **Short/Legacy**: `^[A-Z]{2}\d{1,2}[A-Z]{1,2}\d{1,4}$` (e.g., `GJ1A1234`, `DL1C9999`)
-     - **Bharat Series**: `^\d{2}BH\d{4}[A-Z]{1,2}$` (e.g., `22BH1234AA`)
-   - Verifies against all Indian State and Union Territory RTO codes (`GJ`, `MH`, `DL`, `KA`, `TN`, `UP`, `RJ`, etc.).
+5. **Format Validation & Raw OCR Output Control (`ENABLE_VALIDATION`)**:
+   - The module provides a global toggle in capitals: `ENABLE_VALIDATION: bool = True` (in `sentinel.pipelines.models.anpr`).
+   - **When `ENABLE_VALIDATION = True` (Default)**:
+     - Characters are sanitized to uppercase alphanumeric (`[^A-Z0-9]`).
+     - Validated against Indian registration formats:
+       - **Modern**: `^[A-Z]{2}\d{1,2}[A-Z]{1,3}\d{4}$` (e.g., `GJ01AB1234`, `DL03CAA1234`)
+       - **Short/Legacy**: `^[A-Z]{2}\d{1,2}[A-Z]{1,2}\d{1,4}$` (e.g., `GJ1A1234`, `DL1C9999`)
+       - **Bharat Series**: `^\d{2}BH\d{4}[A-Z]{1,2}$` (e.g., `22BH1234AA`)
+     - Verifies against all 36 Indian State and Union Territory RTO codes (`GJ`, `MH`, `DL`, `KA`, `TN`, `UP`, `RJ`, `JK`, `LA`, etc.).
+   - **When `ENABLE_VALIDATION = False`**:
+     - Strict format validation is bypassed (`validate()` returns `True` for non-empty text).
+     - Outputs raw OCR text directly without stripping non-alphanumeric symbols or forcing Indian registration regex matching, making it adaptable for custom plates, international vehicles, or debugging OCR reads.
 
 6. **Database Persistence (`sightings` & `plate_hypotheses`)**:
    - The best hypothesis is saved into `sightings.plate_text` and `sightings.plate_conf`.
@@ -91,7 +96,20 @@ flowchart TD
 
 ---
 
-## 4. Data Schemas & Return Objects
+## 4. Configuration & Global Toggles
+
+### `ENABLE_VALIDATION` (Global Variable)
+Located in `packages/sentinel-pipelines/src/sentinel/pipelines/models/anpr.py`:
+```python
+ENABLE_VALIDATION: bool = True  # Set to False to disable regex/state checks and emit raw OCR text
+```
+* **Usage**:
+  ```python
+  from sentinel.pipelines.models import anpr
+
+  # Turn off validation to capture raw OCR output
+  anpr.ENABLE_VALIDATION = False
+  ```
 
 ### 4.1. `PlateRead` Data Structure
 ```python
