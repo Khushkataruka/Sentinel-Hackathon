@@ -1,4 +1,4 @@
-﻿"""Comprehensive test suite for the ANPR pipeline and models."""
+"""Comprehensive test suite for the ANPR pipeline and models."""
 
 from __future__ import annotations
 
@@ -122,6 +122,38 @@ def test_process_anpr_frame_artifact_saving():
         saved_img = cv2.imread(str(out_path))
         assert saved_img is not None
         assert saved_img.shape == (480, 640, 3)
+
+
+def test_save_artifacts_flag_toggle():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        out_path = Path(tmpdir) / "annotated_subdir" / "frame_toggle.jpg"
+        frame = make_test_crop(w=640, h=480, seed=1)
+
+        mock_reader = MagicMock()
+        mock_reader.process_frame.return_value = [
+            {"vehicle_bbox": [0, 0, 100, 100], "class": "car", "plate_detected": False}
+        ]
+
+        original_save = anpr.SAVE_ARTIFACTS
+        try:
+            # When SAVE_ARTIFACTS is False, image is NOT written to disk, but results are returned
+            anpr.SAVE_ARTIFACTS = False
+            annotated, results = anpr.process_anpr_frame(
+                frame, frame_id=2, reader=mock_reader, save_annotated=True, output_path=out_path
+            )
+            assert not out_path.exists()
+            assert len(results) == 1
+            assert results[0]["frame_id"] == 2
+
+            # When SAVE_ARTIFACTS is True, image is written
+            anpr.SAVE_ARTIFACTS = True
+            annotated, results = anpr.process_anpr_frame(
+                frame, frame_id=3, reader=mock_reader, save_annotated=True, output_path=out_path
+            )
+            assert out_path.exists()
+            assert len(results) == 1
+        finally:
+            anpr.SAVE_ARTIFACTS = original_save
 
 
 @pytest.mark.asyncio

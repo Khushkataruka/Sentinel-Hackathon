@@ -137,7 +137,28 @@ ENABLE_VALIDATION: bool = True  # Set to False to disable regex/state checks and
   anpr.ENABLE_VALIDATION = False
   ```
 
-### 4.1. `PlateRead` Data Structure
+### 4.3. `SAVE_ARTIFACTS` (Global Variable)
+Located in `packages/sentinel-pipelines/src/sentinel/pipelines/models/anpr.py` and `example/anpr/script.py`:
+```python
+SAVE_ARTIFACTS: bool = True  # Set to False to disable image writing to disk (JSON metadata is always saved)
+```
+* **Performance Note & Warning**:
+  * Writing image artifacts (annotated frames, cropped vehicle/plate cutouts) to disk involves substantial I/O overhead.
+  * When `SAVE_ARTIFACTS = True` (Default), the pipeline displays a performance advisory warning.
+  * When `SAVE_ARTIFACTS = False`, image disk writes are bypassed for maximum pipeline throughput, while structured OCR JSON metadata is always generated and saved.
+* **Usage**:
+  ```python
+  from sentinel.pipelines.models import anpr
+
+  # Disable disk image writes for maximum throughput
+  anpr.SAVE_ARTIFACTS = False
+  ```
+
+---
+
+## 5. Data Schemas & Return Objects
+
+### 5.1. `PlateRead` Data Structure
 ```python
 @dataclass
 class PlateRead:
@@ -148,7 +169,7 @@ class PlateRead:
     bbox: tuple[int, int, int, int] | None  # Local (lx1, ly1, lx2, ly2) bounding box
 ```
 
-### 4.2. Full Frame Return Object (`process_frame`)
+### 5.2. Full Frame Return Object (`process_frame`)
 ```json
 [
   {
@@ -169,7 +190,7 @@ class PlateRead:
 ]
 ```
 
-### 4.3. Database Tables
+### 5.3. Database Tables
 
 #### `sightings` (ANPR Columns)
 - `plate_text` (`text`): Best detected license plate string.
@@ -191,7 +212,7 @@ CREATE INDEX plate_hypotheses_trgm_idx ON plate_hypotheses
 
 ---
 
-## 5. Artifacts Storage & Retention Management
+## 6. Artifacts Storage & Retention Management
 
 | Artifact Type | Storage Location Path | Reference in DB | Generation Trigger |
 |---|---|---|---|
@@ -207,7 +228,7 @@ CREATE INDEX plate_hypotheses_trgm_idx ON plate_hypotheses
 
 ---
 
-## 6. Testing, Quality Assurance & Verification
+## 7. Testing, Quality Assurance & Verification
 
 The ANPR test suite is verified via `pytest`:
 

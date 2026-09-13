@@ -55,6 +55,11 @@ OCR_ENGINE: OCREngine = OCREngine.TESSERACT
 #: When False, format validation is bypassed, outputting the raw OCR output.
 ENABLE_VALIDATION: bool = True
 
+#: Global configuration flag to enable or disable saving image artifacts (annotated frames, crops).
+#: When True (default), image artifacts are saved to disk with a performance warning.
+#: When False, image saving is skipped to maximize pipeline throughput (OCR metadata/JSON is always retained).
+SAVE_ARTIFACTS: bool = True
+
 
 def _configure_tesseract() -> bool:
     try:
@@ -562,9 +567,17 @@ def process_anpr_frame(
                 )
 
     if save_annotated and output_path and annotated is not None:
-        p = Path(output_path)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        cv2.imwrite(str(p), annotated)
+        if SAVE_ARTIFACTS:
+            log.warning(
+                "saving_artifacts_enabled",
+                hint="Saving image artifacts to disk may slow down pipeline throughput",
+                path=str(output_path),
+            )
+            p = Path(output_path)
+            p.parent.mkdir(parents=True, exist_ok=True)
+            cv2.imwrite(str(p), annotated)
+        else:
+            log.debug("saving_artifacts_skipped", path=str(output_path))
 
     return annotated, results
 

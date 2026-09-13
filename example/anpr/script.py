@@ -20,10 +20,14 @@ for pkg in ["sentinel-core", "sentinel-registry", "sentinel-ingest", "sentinel-p
 from sentinel.pipelines.models import anpr
 
 # ==============================================================================
-# OCR Engine Selection Switch (TESSERACT or EASYOCR)
+# Global Switches & Configuration
 # ==============================================================================
 OCREngine = anpr.OCREngine
 OCR_ENGINE: anpr.OCREngine = anpr.OCREngine.TESSERACT
+
+#: Switch to turn on/off saving of image artifacts (crops, annotated frames).
+#: True by default. Disabling image saving increases throughput; JSON is always saved.
+SAVE_ARTIFACTS: bool = True
 
 
 def run_anpr_on_image(
@@ -32,10 +36,16 @@ def run_anpr_on_image(
     vehicle_conf: float = 0.20,
     lp_conf: float = 0.20,
     ocr_engine: anpr.OCREngine = OCR_ENGINE,
+    save_artifacts: bool = SAVE_ARTIFACTS,
 ) -> dict:
     image_path = Path(image_path)
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    if save_artifacts:
+        print("[WARNING] Artifact saving is ENABLED. Note: saving image artifacts to disk (annotated frames, crops) may slow down pipeline throughput.")
+    else:
+        print("[INFO] Artifact saving is DISABLED. Skipping image file generation to maximize pipeline throughput.")
 
     if not image_path.exists():
         raise FileNotFoundError(f"Input image not found: {image_path}")
@@ -107,7 +117,7 @@ def run_anpr_on_image(
         vx1, vy1, vx2, vy2 = item["vehicle_bbox"]
         # Crop vehicle
         v_crop = frame[max(0, vy1):min(h, vy2), max(0, vx1):min(w, vx2)]
-        if v_crop.size > 0:
+        if save_artifacts and v_crop.size > 0:
             v_crop_path = output_dir / f"vehicle_crop_{idx}.png"
             cv2.imwrite(str(v_crop_path), v_crop)
             item["vehicle_crop_path"] = str(v_crop_path)
@@ -131,7 +141,7 @@ def run_anpr_on_image(
             px2, py2 = min(w, px2), min(h, py2)
 
             plate_crop = frame[py1:py2, px1:px2]
-            if plate_crop.size > 0:
+            if save_artifacts and plate_crop.size > 0:
                 plate_crop_path = output_dir / f"detected_plate_{idx}.png"
                 cv2.imwrite(str(plate_crop_path), plate_crop)
                 item["plate_crop_path"] = str(plate_crop_path)
@@ -155,13 +165,16 @@ def run_anpr_on_image(
 
         results_data["detections"].append(item)
 
-    # Save annotated full frame
-    annotated_path = output_dir / "annotated_frame.png"
-    cv2.imwrite(str(annotated_path), annotated)
-    results_data["annotated_frame_path"] = str(annotated_path)
-    print(f"[INFO] Saved annotated frame to: {annotated_path}")
+    # Save annotated full frame if artifact saving is enabled
+    if save_artifacts:
+        annotated_path = output_dir / "annotated_frame.png"
+        cv2.imwrite(str(annotated_path), annotated)
+        results_data["annotated_frame_path"] = str(annotated_path)
+        print(f"[INFO] Saved annotated frame to: {annotated_path}")
+    else:
+        results_data["annotated_frame_path"] = None
 
-    # Save JSON metadata
+    # Always save JSON metadata
     json_path = output_dir / "ocr_results.json"
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(results_data, f, indent=2)
