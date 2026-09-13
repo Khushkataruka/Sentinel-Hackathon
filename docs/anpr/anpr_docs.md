@@ -98,7 +98,33 @@ flowchart TD
 
 ## 4. Configuration & Global Toggles
 
-### `ENABLE_VALIDATION` (Global Variable)
+### 4.1. `OCR_ENGINE` Switch (`OCREngine` Enum)
+The system supports multiple OCR engines via the `OCREngine` enum. It is optimized for CPU execution on systems without discrete GPUs.
+
+```python
+class OCREngine(str, Enum):
+    EASYOCR = "easyocr"
+    TESSERACT = "tesseract"
+
+#: Global variable in sentinel.pipelines.models.anpr
+OCR_ENGINE: OCREngine = OCREngine.TESSERACT
+```
+
+* **Engines**:
+  * `OCREngine.TESSERACT` (Default / Active): Fast, lightweight C++ OCR engine with native AVX2/AVX512/SSE CPU vectorization, ideal for CPU-only environments. Includes adaptive/Otsu binarization and CLAHE contrast enhancement for license plate recognition.
+  * `OCREngine.EASYOCR`: PyTorch CRAFT + ResNet deep learning OCR reader.
+* **Usage**:
+  ```python
+  from sentinel.pipelines.models import anpr
+
+  # Switch active engine globally
+  anpr.OCR_ENGINE = anpr.OCREngine.TESSERACT
+
+  # Or instantiate a reader with a specific engine
+  reader = anpr.load_plate_reader(ocr_engine=anpr.OCREngine.TESSERACT)
+  ```
+
+### 4.2. `ENABLE_VALIDATION` (Global Variable)
 Located in `packages/sentinel-pipelines/src/sentinel/pipelines/models/anpr.py`:
 ```python
 ENABLE_VALIDATION: bool = True  # Set to False to disable regex/state checks and emit raw OCR text

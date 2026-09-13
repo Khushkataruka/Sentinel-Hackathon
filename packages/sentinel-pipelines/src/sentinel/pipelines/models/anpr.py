@@ -10,8 +10,11 @@ confusion-weighted fuzzy matching in correlation work at all.
 
 from __future__ import annotations
 
+import os
 import re
+import shutil
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -21,6 +24,7 @@ from sentinel.core.logging import get_logger
 from sentinel.pipelines.models.stubbase import rng_for
 
 log = get_logger(__name__)
+
 
 #: Indian plate formats. Validating against these rejects a large amount of
 #: OCR garbage before it ever reaches the database.
@@ -38,10 +42,38 @@ STATE_CODES = {
 }
 
 
+class OCREngine(str, Enum):
+    EASYOCR = "easyocr"
+    TESSERACT = "tesseract"
+
+
+#: Global configuration flag to select the OCR Engine (TESSERACT or EASYOCR).
+OCR_ENGINE: OCREngine = OCREngine.TESSERACT
+
 #: Global configuration flag to enable or disable license plate format validation.
 #: When True (default), OCR output is sanitized and validated against Indian registration formats.
 #: When False, format validation is bypassed, outputting the raw OCR output.
-ENABLE_VALIDATION: bool = False
+ENABLE_VALIDATION: bool = True
+
+
+def _configure_tesseract() -> bool:
+    try:
+        import pytesseract
+
+        if shutil.which("tesseract"):
+            return True
+        candidates = [
+            r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+            r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+            os.path.expandvars(r"%LOCALAPPDATA%\Programs\Tesseract-OCR\tesseract.exe"),
+        ]
+        for c in candidates:
+            if Path(c).exists():
+                pytesseract.pytesseract.tesseract_cmd = str(c)
+                return True
+    except Exception:
+        pass
+    return False
 
 
 @dataclass
@@ -124,11 +156,11 @@ class StubPlateReader:
 
 
 class PyTorchPlateReader:
-    """Plate detector plus EasyOCR reader over PyTorch and Ultralytics.
+    """Plate detector plus OCR reader (Tesseract / EasyOCR) over PyTorch and Ultralytics.
 
     Adapted from prototype/anpr_v2.py.
     Processes vehicle crops or full video frames. Runs fine-tuned YOLO for license
-    plate localization, cuts out the plate, and applies EasyOCR with format
+    plate localization, cuts out the plate, and applies Tesseract/EasyOCR with format
     sanitization and Indian registration validation.
     """
 
@@ -140,8 +172,8 @@ class PyTorchPlateReader:
         vehicle_model_path: Path | str | None = None,
         device: str | None = None,
         conf: float = 0.25,
+        ocr_engine: OCREngine | str | None = None,
     ) -> None:
-        import easyocr
         import torch
         from ultralytics import YOLO
 
@@ -157,13 +189,119 @@ class PyTorchPlateReader:
             else None
         )
 
-        self.ocr_engine = easyocr.Reader(["en"], gpu=(self.device == "cuda"))
+        engine_choice = ocr_engine or OCR_ENGINE
+        if isinstance(engine_choice, OCREngine):
+            self.ocr_engine_type = engine_choice
+        else:
+            val = str(engine_choice).lower().split(".")[-1]
+            self.ocr_engine_type = OCREngine(val)
+        self.easyocr_reader = None
+
+        if self.ocr_engine_type == OCREngine.EASYOCR:
+            import easyocr
+            self.easyocr_reader = easyocr.Reader(["en"], gpu=(self.device == "cuda"))
+        else:
+            _configure_tesseract()
+
         log.info(
             "pytorch_plate_reader_loaded",
             lp_model=str(self.lp_model_path),
             vehicle_model=str(self.vehicle_model_path) if self.vehicle_model_path else None,
+            ocr_engine=self.ocr_engine_type.value,
             device=self.device,
         )
+
+    def _read_easyocr(self, lp_cutout: np.ndarray) -> list[tuple[list, str, float]]:
+        import easyocr
+
+        if self.easyocr_reader is None:
+            self.easyocr_reader = easyocr.Reader(["en"], gpu=(self.device == "cuda"))
+        try:
+            return self.easyocr_reader.readtext(lp_cutout)
+        except Exception as exc:
+            log.debug("easyocr_read_failed", error=str(exc))
+            return []
+
+    def _read_tesseract(self, lp_cutout: np.ndarray) -> list[tuple[list, str, float]]:
+        import cv2
+        import pytesseract
+
+        _configure_tesseract()
+
+        if len(lp_cutout.shape) == 3 and lp_cutout.shape[2] == 3:
+            gray = cv2.cvtColor(lp_cutout, cv2.COLOR_BGR2GRAY)
+        else:
+            gray = lp_cutout.copy()
+
+        h, w = gray.shape[:2]
+        if h < 50 or w < 120:
+            scale = max(2.5, 70.0 / max(1, h))
+            gray = cv2.resize(gray, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_CUBIC)
+
+        # Bilateral blur to remove sensor noise while preserving character edges
+        blurred = cv2.bilateralFilter(gray, 9, 75, 75)
+
+        # CLAHE contrast enhancement
+        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+        enhanced = clahe.apply(blurred)
+
+        # Otsu thresholding
+        _, otsu = cv2.threshold(enhanced, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+        # Adaptive thresholding
+        adaptive = cv2.adaptiveThreshold(
+            blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 15, 4
+        )
+
+        variants = [enhanced, otsu, adaptive]
+        configs = [
+            "--psm 7 --oem 3 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+            "--psm 8 --oem 3 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+            "--psm 6 --oem 3 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+            "--psm 11 --oem 3",
+        ]
+
+        best_results: list[tuple[list, str, float]] = []
+        max_score = -1.0
+
+        for img_var in variants:
+            for cfg in configs:
+                try:
+                    data = pytesseract.image_to_data(img_var, output_type=pytesseract.Output.DICT, config=cfg)
+                    n_boxes = len(data.get("text", []))
+                    current_results = []
+                    total_conf = 0.0
+                    for i in range(n_boxes):
+                        t = str(data["text"][i]).strip()
+                        conf_val = float(data["conf"][i])
+                        if not t or conf_val < 0:
+                            continue
+                        bx, by, bw, bh = data["left"][i], data["top"][i], data["width"][i], data["height"][i]
+                        bbox_pts = [[bx, by], [bx + bw, by], [bx + bw, by + bh], [bx, by + bh]]
+                        norm_conf = max(0.1, min(1.0, conf_val / 100.0))
+                        current_results.append((bbox_pts, t, norm_conf))
+                        total_conf += norm_conf
+
+                    if current_results:
+                        score = total_conf
+                        # Bonus if it matches Indian format
+                        combined = "".join(re.sub(r"[^A-Z0-9]", "", r[1].upper()) for r in current_results)
+                        if validate(combined):
+                            score += 10.0
+                        if score > max_score:
+                            max_score = score
+                            best_results = current_results
+                            if validate(combined):
+                                break
+                except Exception as exc:
+                    log.debug("tesseract_read_failed", error=str(exc))
+                    continue
+            if max_score >= 10.0:
+                break
+
+        if not best_results:
+            return self._read_easyocr(lp_cutout)
+        return best_results
 
     def __call__(self, crop: np.ndarray, top_k: int = 3) -> list[PlateRead]:
         """Process one vehicle crop.
@@ -207,11 +345,10 @@ class PyTorchPlateReader:
             if lp_cutout.size == 0:
                 continue
 
-            try:
-                ocr_results = self.ocr_engine.readtext(lp_cutout)
-            except Exception as exc:
-                log.debug("easyocr_read_failed", error=str(exc))
-                continue
+            if self.ocr_engine_type == OCREngine.TESSERACT:
+                ocr_results = self._read_tesseract(lp_cutout)
+            else:
+                ocr_results = self._read_easyocr(lp_cutout)
 
             if not ocr_results:
                 continue
@@ -459,6 +596,7 @@ def _find_file(candidates: list[Path | str | None]) -> Path | None:
 def load_plate_reader(
     lp_model_path: Path | str | None = None,
     vehicle_model_path: Path | str | None = None,
+    ocr_engine: OCREngine | str | None = None,
 ) -> PlateReader:
     curr_dir = Path(__file__).resolve().parent
     root_dir = Path(__file__).resolve().parents[6]
@@ -493,6 +631,7 @@ def load_plate_reader(
             return PyTorchPlateReader(
                 lp_model_path=lp_path,
                 vehicle_model_path=veh_path,
+                ocr_engine=ocr_engine,
             )
         except Exception as exc:
             log.error("pytorch_plate_reader_load_failed", path=str(lp_path), error=str(exc))
