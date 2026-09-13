@@ -31,8 +31,10 @@ PLATE_PATTERNS = [
 ]
 
 STATE_CODES = {
-    "GJ", "MH", "RJ", "MP", "DL", "UP", "KA", "TN", "AP", "TS", "HR", "PB",
-    "WB", "KL", "OD", "BR", "JH", "CG", "UK", "HP", "GA", "AS", "CH", "DD", "DN",
+    "AN", "AP", "AR", "AS", "BR", "CG", "CH", "DD", "DN", "DL", "GA", "GJ",
+    "HP", "HR", "JH", "JK", "KA", "KL", "LA", "LD", "MH", "ML", "MN", "MP",
+    "MZ", "NL", "OD", "OR", "PB", "PY", "RJ", "SK", "TN", "TR", "TS", "UA",
+    "UK", "UP", "WB",
 }
 
 
@@ -47,7 +49,10 @@ class PlateRead:
 
 def validate(text: str) -> bool:
     cleaned = re.sub(r"[^A-Z0-9]", "", text.upper())
-    if len(cleaned) < 6 or cleaned[:2] not in STATE_CODES:
+    if len(cleaned) < 6:
+        return False
+    is_bh = bool(re.match(r"^\d{2}BH", cleaned))
+    if cleaned[:2] not in STATE_CODES and not is_bh:
         return False
     return any(pattern.match(cleaned) for pattern in PLATE_PATTERNS)
 
@@ -203,9 +208,35 @@ class PyTorchPlateReader:
             if not ocr_results:
                 continue
 
-            for item in ocr_results:
-                if len(item) < 3:
-                    continue
+            # First, check joined multi-line text (common in 2-line Indian plates)
+            valid_items = [item for item in ocr_results if len(item) >= 3]
+            if len(valid_items) > 1:
+                # Sort items top-to-bottom then left-to-right based on bounding box y0, x0
+                def _sort_key(it):
+                    pts = it[0]
+                    return (min(p[1] for p in pts), min(p[0] for p in pts))
+
+                sorted_items = sorted(valid_items, key=_sort_key)
+                combined_clean = "".join(
+                    re.sub(r"[^A-Z0-9]", "", str(it[1]).upper()).strip() for it in sorted_items
+                )
+                if combined_clean and combined_clean not in seen_texts:
+                    seen_texts.add(combined_clean)
+                    avg_prob = float(np.mean([float(it[2]) for it in sorted_items]))
+                    combined_conf = round(lp_score * avg_prob, 4)
+                    is_valid = validate(combined_clean)
+                    reads.append(
+                        PlateRead(
+                            text=combined_clean,
+                            confidence=combined_conf,
+                            rank=len(reads) + 1,
+                            valid_format=is_valid,
+                            bbox=(int(lx1), int(ly1), int(lx2), int(ly2)),
+                        )
+                    )
+
+            # Also check individual OCR tokens
+            for item in valid_items:
                 raw_text, ocr_prob = item[1], float(item[2])
                 clean_text = re.sub(r"[^A-Z0-9]", "", str(raw_text).upper()).strip()
                 if not clean_text or clean_text in seen_texts:
@@ -339,7 +370,7 @@ def process_anpr_frame(
     if frame is None or frame.size == 0:
         return annotated, []
 
-    if isinstance(reader, PyTorchPlateReader):
+    if hasattr(reader, "process_frame"):
         results = reader.process_frame(
             frame,
             vehicle_conf=vehicle_conf,
@@ -378,7 +409,9 @@ def process_anpr_frame(
                 )
 
     if save_annotated and output_path and annotated is not None:
-        cv2.imwrite(str(output_path), annotated)
+        p = Path(output_path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        cv2.imwrite(str(p), annotated)
 
     return annotated, results
 
