@@ -1,20 +1,47 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api.js'
+import OnboardCameraModal from '../components/OnboardCameraModal.jsx'
 
 export default function AdminPage() {
   const [adapters, setAdapters] = useState([])
   const [queues, setQueues] = useState([])
   const [needSurvey, setNeedSurvey] = useState([])
   const [error, setError] = useState(null)
+  const [modalOpen, setModalOpen] = useState(false)
 
-  useEffect(() => {
+  const reloadData = () => {
     Promise.all([api.adapters(), api.queueDepth(), api.camerasNeedingSurvey()])
       .then(([a, q, s]) => { setAdapters(a); setQueues(q); setNeedSurvey(s) })
       .catch((e) => setError(e.message))
+  }
+
+  useEffect(() => {
+    reloadData()
   }, [])
 
   return (
     <>
+      <div className="panel row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <strong>System Administration</strong> — Adapters, Queues & Camera Onboarding
+        </div>
+        <button
+          onClick={() => setModalOpen(true)}
+          style={{
+            padding: '8px 16px',
+            backgroundColor: '#0284c7',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '6px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            fontSize: '13px',
+          }}
+        >
+          + Onboard New Camera
+        </button>
+      </div>
+
       {error && <div className="panel warn">{error}</div>}
 
       <div className="panel">
@@ -73,6 +100,13 @@ export default function AdminPage() {
         </p>
         <p>{needSurvey.length ? needSurvey.join(', ') : 'None — every camera is surveyed.'}</p>
       </div>
+
+      <OnboardCameraModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onSuccess={reloadData}
+      />
     </>
   )
 }
+
