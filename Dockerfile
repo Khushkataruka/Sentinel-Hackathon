@@ -13,6 +13,7 @@ RUN npm run build
 # Discarded after the export; only the .onnx is carried forward. CPU-only
 # torch, because this stage exists to run one export and then die.
 FROM python:3.11-slim AS models
+RUN apt-get update && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 && rm -rf /var/lib/apt/lists/*
 RUN pip install --no-cache-dir \
       --extra-index-url https://download.pytorch.org/whl/cpu \
       ultralytics
@@ -38,7 +39,8 @@ ENV UV_LINK_MODE=copy PYTHONUNBUFFERED=1
 # sentinel-* from [tool.uv.sources], not from PyPI.
 COPY pyproject.toml ./
 COPY packages/ packages/
-RUN uv sync --no-dev \
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --no-dev \
  && uv pip install "onnxruntime>=1.18"
 
 COPY db/ db/

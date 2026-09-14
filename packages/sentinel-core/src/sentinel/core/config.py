@@ -86,6 +86,9 @@ class Settings(BaseSettings):
     plate_detect_model_path: Path = Path("./var/models/plate_detect.onnx")
     plate_ocr_model_path: Path = Path("./var/models/plate_ocr.onnx")
 
+    vllm_url: str = ""
+    vllm_model: str = "google/gemma-3-27b-it"
+
     embedding_dim: int = 512       # MUST equal sightings.embedding's declared dim
     caption_embedding_dim: int = 384
 

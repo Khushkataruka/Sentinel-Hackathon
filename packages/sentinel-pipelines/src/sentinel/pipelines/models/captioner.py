@@ -18,6 +18,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
+import base64
+import json
+import cv2
+import httpx
 import numpy as np
 from sentinel.core.config import settings
 from sentinel.core.logging import get_logger
@@ -167,7 +171,89 @@ class StubCaptionEmbedder:
         return (vector / norm).tolist() if norm else vector.tolist()
 
 
+class VllmCaptioner:
+    """Uses a vLLM chat endpoint to generate structured descriptions."""
+    
+    is_stub = False
+
+    def __init__(self, base_url: str, model: str) -> None:
+        self.base_url = base_url.rstrip("/")
+        self.model = model
+        self.endpoint = f"{self.base_url}/v1/chat/completions"
+        self.client = httpx.Client(timeout=30.0)
+
+    def __call__(self, crop: np.ndarray, vehicle_class: str) -> Description:
+        # Encode image
+        _, buffer = cv2.imencode('.jpg', crop)
+        b64_img = base64.b64encode(buffer).decode('utf-8')
+        image_data_url = f"data:image/jpeg;base64,{b64_img}"
+
+        prompt = (
+            f"This is an image of a {vehicle_class}. "
+            "Please describe this vehicle in detail. Return ONLY a JSON object with the following keys:\n"
+            "- colour: string (the primary color)\n"
+            "- vtype: string (e.g. hatchback, sedan, suv, motorcycle, bus, truck, etc.)\n"
+            "- make: string (the manufacturer brand)\n"
+            "- model: string (the specific vehicle model)\n"
+            "- features: list of strings (e.g. ['roof carrier', 'tinted windows'])\n"
+            "- caption: string (a brief 1-2 sentence description of the vehicle)\n"
+            "Respond with strictly valid JSON and no markdown formatting or backticks."
+        )
+
+        payload = {
+            "model": self.model,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": image_data_url}}
+                    ]
+                }
+            ],
+            "temperature": 0.2,
+            "max_tokens": 256,
+            "stream": False
+        }
+
+        try:
+            response = self.client.post(self.endpoint, json=payload)
+            response.raise_for_status()
+            data = response.json()
+            content = data["choices"][0]["message"]["content"].strip()
+            
+            # Clean markdown code blocks if present
+            if content.startswith("```json"):
+                content = content[7:]
+            if content.startswith("```"):
+                content = content[3:]
+            if content.endswith("```"):
+                content = content[:-3]
+                
+            parsed = json.loads(content.strip())
+            
+            # Helper to safely extract strings
+            def get_str(k):
+                v = parsed.get(k)
+                return str(v) if v is not None and str(v).lower() != "none" else None
+                
+            return Description(
+                colour=get_str("colour"),
+                vtype=get_str("vtype"),
+                make=get_str("make"),
+                model=get_str("model"),
+                features=parsed.get("features", []) if isinstance(parsed.get("features"), list) else [],
+                caption=get_str("caption") or ""
+            )
+        except Exception as exc:
+            log.warning("vllm_caption_failed", error=str(exc))
+            return Description()
+
+
 def load_captioner() -> Captioner:
+    if settings.vllm_url:
+        return VllmCaptioner(settings.vllm_url, settings.vllm_model)
+
     path = settings.caption_model_path
     if Path(path).exists():
         try:

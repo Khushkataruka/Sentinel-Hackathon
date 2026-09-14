@@ -58,6 +58,7 @@ export const api = {
   evidence: (readId) => request(`/evidence/${readId}`),
   frames: (params) => request(`/frames${params}`),
   mediaUrl: (kind, ref) => `/media/${kind}/${ref}`,
+  sightings: (params = '') => request(`/sightings${params}`),
 
   // watchlist
   watchlist: () => request('/watchlist'),
