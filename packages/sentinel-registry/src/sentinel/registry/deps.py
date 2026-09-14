@@ -47,16 +47,16 @@ async def current_user(
     )
     if row is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, f"unknown user {x_sentinel_user!r}")
-    return CurrentUser(id=str(row["id"]), **{k: row[k] for k in
-                       ("username", "display_name", "department_id", "role")})
+    return CurrentUser(
+        id=str(row["id"]),
+        **{k: row[k] for k in ("username", "display_name", "department_id", "role")},
+    )
 
 
 def require_role(*roles: str):
     async def _check(user: Annotated[CurrentUser, Depends(current_user)]) -> CurrentUser:
         if user.role not in roles:
-            raise HTTPException(
-                status.HTTP_403_FORBIDDEN, f"role {user.role!r} may not do this"
-            )
+            raise HTTPException(status.HTTP_403_FORBIDDEN, f"role {user.role!r} may not do this")
         return user
 
     return _check

@@ -42,9 +42,12 @@ def test_two_vehicles_get_two_ids():
     tracker = ByteTrack()
     for step in range(10):
         tracker.update(
-            [det(100 + step * 10, 200, 180 + step * 10, 260),
-             det(400 - step * 10, 300, 480 - step * 10, 360)],
-            0.1, step * 0.1,
+            [
+                det(100 + step * 10, 200, 180 + step * 10, 260),
+                det(400 - step * 10, 300, 480 - step * 10, 360),
+            ],
+            0.1,
+            step * 0.1,
         )
     assert tracker._next_id - 1 >= 2
 
@@ -106,13 +109,13 @@ def test_reset_ends_every_track():
 def test_kalman_integrates_over_real_time_not_frame_count():
     """Two seconds of motion must advance the box twice as far as one,
     whatever the frame cadence was."""
+
     def advance(dt, steps):
         box = KalmanBox(xyxy_to_xyah((100.0, 100.0, 180.0, 160.0)))
         for i in range(1, steps + 1):
             box.predict(dt)
-            box.update(xyxy_to_xyah((100.0 + i * 20 * dt, 100.0,
-                                     180.0 + i * 20 * dt, 160.0)))
-        return box.mean[4]     # x velocity
+            box.update(xyxy_to_xyah((100.0 + i * 20 * dt, 100.0, 180.0 + i * 20 * dt, 160.0)))
+        return box.mean[4]  # x velocity
 
     slow = advance(0.1, 20)
     fast = advance(0.2, 10)
@@ -122,9 +125,9 @@ def test_kalman_integrates_over_real_time_not_frame_count():
 
 def test_a_long_gap_does_not_fling_the_box():
     box = KalmanBox(xyxy_to_xyah((100.0, 100.0, 180.0, 160.0)))
-    box.mean[4] = 500.0        # a large velocity
+    box.mean[4] = 500.0  # a large velocity
     before = box.mean[0]
-    box.predict(30.0)          # a thirty second gap
+    box.predict(30.0)  # a thirty second gap
     assert box.mean[0] - before <= 500.0 * 1.0 + 1e-6
 
 
@@ -134,19 +137,25 @@ def test_ordinary_traffic_is_not_mistaken_for_a_scene_cut():
     tracker = ByteTrack()
     for step in range(8):
         tracker.update(
-            [det(100 + step * 12, 200, 180 + step * 12, 260),
-             det(300 + step * 12, 300, 380 + step * 12, 360),
-             det(500 - step * 12, 100, 580 - step * 12, 160)],
-            0.1, step * 0.1,
+            [
+                det(100 + step * 12, 200, 180 + step * 12, 260),
+                det(300 + step * 12, 300, 380 + step * 12, 360),
+                det(500 - step * 12, 100, 580 - step * 12, 160),
+            ],
+            0.1,
+            step * 0.1,
         )
     assert not tracker.suspects_scene_cut()
 
     # One of the three leaves the frame.
     for step in range(8, 12):
         tracker.update(
-            [det(100 + step * 12, 200, 180 + step * 12, 260),
-             det(300 + step * 12, 300, 380 + step * 12, 360)],
-            0.1, step * 0.1,
+            [
+                det(100 + step * 12, 200, 180 + step * 12, 260),
+                det(300 + step * 12, 300, 380 + step * 12, 360),
+            ],
+            0.1,
+            step * 0.1,
         )
         assert not tracker.suspects_scene_cut(), "one vehicle leaving is not a cut"
 
@@ -161,17 +170,18 @@ def test_every_vehicle_replaced_at_once_is_a_scene_cut():
     tracker = ByteTrack()
     for step in range(8):
         tracker.update(
-            [det(100 + step * 12, 200, 180 + step * 12, 260),
-             det(300 + step * 12, 300, 380 + step * 12, 360),
-             det(500 - step * 12, 100, 580 - step * 12, 160)],
-            0.1, step * 0.1,
+            [
+                det(100 + step * 12, 200, 180 + step * 12, 260),
+                det(300 + step * 12, 300, 380 + step * 12, 360),
+                det(500 - step * 12, 100, 580 - step * 12, 160),
+            ],
+            0.1,
+            step * 0.1,
         )
     assert not tracker.suspects_scene_cut()
 
     # The recording loops: three different vehicles, elsewhere in the frame.
-    tracker.update(
-        [det(20, 400, 100, 450), det(600, 30, 640, 80)], 0.067, 0.8
-    )
+    tracker.update([det(20, 400, 100, 450), det(600, 30, 640, 80)], 0.067, 0.8)
     assert tracker.suspects_scene_cut()
 
 
@@ -241,7 +251,8 @@ def test_person_box_cannot_capture_a_vehicle_track():
     person = (305, 190, 375, 295)
     tracker.update(
         [Detection(person, 0.95, "person"), Detection(bike, 0.9, "motorcycle")],
-        0.1, 0.4,
+        0.1,
+        0.4,
     )
 
     bike_tracks = [t for t in tracker.tracks if t.cls == "motorcycle"]

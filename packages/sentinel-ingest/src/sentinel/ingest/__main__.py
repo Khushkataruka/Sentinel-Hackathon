@@ -53,8 +53,10 @@ async def _adapters() -> None:
         await sync_to_registry(loaded)
         print("\nadapter status written to the registry")
     except Exception as exc:
-        print(f"\nnot recorded in the registry ({type(exc).__name__}); "
-              f"the results above are still valid")
+        print(
+            f"\nnot recorded in the registry ({type(exc).__name__}); "
+            f"the results above are still valid"
+        )
     finally:
         await close_pool()
 
@@ -131,9 +133,7 @@ def _preflight(camera_id: str, seconds: float, url: str | None, as_json: bool) -
         from sentinel.core.config import settings as _settings
 
         if streamurl.is_rtsp(url):
-            url = streamurl.with_credentials(
-                url, _settings.grid_email, _settings.grid_password
-            )
+            url = streamurl.with_credentials(url, _settings.grid_email, _settings.grid_password)
             handle = StreamHandle(camera_id, url, "tcp", options={"rtsp_transport": "tcp"})
         else:
             handle = StreamHandle(camera_id, url, "tcp")
@@ -171,9 +171,7 @@ def main(argv: list[str] | None = None) -> int:
     probe.add_argument("camera_id")
     probe.add_argument("--seconds", type=float, default=15.0)
 
-    pre = sub.add_parser(
-        "preflight", help="measure a feed: real fps, PTS behaviour, loop period"
-    )
+    pre = sub.add_parser("preflight", help="measure a feed: real fps, PTS behaviour, loop period")
     pre.add_argument("camera_id")
     pre.add_argument("--seconds", type=float, default=180.0)
     pre.add_argument("--url", default=None, help="bypass adapters, measure this URL")
@@ -185,19 +183,25 @@ def main(argv: list[str] | None = None) -> int:
     off.add_argument("videos", nargs="+", help="video files to ingest")
     off.add_argument("--out", default="out", help="run directory (default: ./out)")
     off.add_argument(
-        "--manifest", default=None,
+        "--manifest",
+        default=None,
         help="JSON giving each video a camera_id, name, lat, lon and start_at",
     )
     off.add_argument(
-        "--keep-sightings", action="store_true",
+        "--keep-sightings",
+        action="store_true",
         help="add to previous runs instead of replacing them for these cameras",
     )
     off.add_argument(
-        "--leg-km", type=float, default=offline_mod.LEG_KM,
+        "--leg-km",
+        type=float,
+        default=offline_mod.LEG_KM,
         help="synthetic spacing between consecutive videos, km",
     )
     off.add_argument(
-        "--leg-seconds", type=float, default=offline_mod.LEG_SECONDS,
+        "--leg-seconds",
+        type=float,
+        default=offline_mod.LEG_SECONDS,
         help="synthetic spacing between consecutive videos, seconds",
     )
 
@@ -207,7 +211,9 @@ def main(argv: list[str] | None = None) -> int:
     ann.add_argument("--out", required=True, help="directory for the annotated videos")
     ann.add_argument("--correlations", default=None, help="correlations.json, for MATCH tags")
     ann.add_argument(
-        "--fps", type=float, default=None,
+        "--fps",
+        type=float,
+        default=None,
         help="must match the offline pass; defaults to SENTINEL_TARGET_DECODE_FPS",
     )
 
@@ -222,16 +228,17 @@ def main(argv: list[str] | None = None) -> int:
         _preflight(args.camera_id, args.seconds, args.url, args.json)
     elif args.command == "offline":
         return offline_mod.main(
-            args.videos, args.out, args.manifest,
+            args.videos,
+            args.out,
+            args.manifest,
             reset=not args.keep_sightings,
-            leg_km=args.leg_km, leg_seconds=args.leg_seconds,
+            leg_km=args.leg_km,
+            leg_seconds=args.leg_seconds,
         )
     elif args.command == "annotate":
         from sentinel.ingest import annotate as annotate_mod
 
-        return annotate_mod.main(
-            args.videos, args.tracks, args.out, args.correlations, args.fps
-        )
+        return annotate_mod.main(args.videos, args.tracks, args.out, args.correlations, args.fps)
     else:
         asyncio.run(_probe(args.camera_id, args.seconds))
     return 0

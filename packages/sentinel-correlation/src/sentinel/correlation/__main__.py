@@ -58,7 +58,8 @@ def main(argv: list[str] | None = None) -> int:
 
     run_cmd = sub.add_parser("run", help="consume the outbox and raise alerts")
     run_cmd.add_argument(
-        "--drain", action="store_true",
+        "--drain",
+        action="store_true",
         help="correlate what is outstanding and exit, rather than waiting for more",
     )
 
@@ -69,14 +70,14 @@ def main(argv: list[str] | None = None) -> int:
     backfill.add_argument("--entry", required=True)
     backfill.add_argument("--days", type=int, default=15)
 
-    cross = sub.add_parser(
-        "crosscam", help="find vehicles seen by more than one of these cameras"
-    )
+    cross = sub.add_parser("crosscam", help="find vehicles seen by more than one of these cameras")
     cross.add_argument("--cameras", nargs="+", required=True)
     cross.add_argument("--out", required=True, help="where to write correlations.json")
     cross.add_argument("--html", default=None, help="also write a standalone report here")
     cross.add_argument(
-        "--max-seeds", type=int, default=None,
+        "--max-seeds",
+        type=int,
+        default=None,
         help="how many sightings to search from; the cap falls on the weakest first",
     )
 
@@ -91,7 +92,9 @@ def main(argv: list[str] | None = None) -> int:
         from sentinel.correlation import crosscam
 
         return crosscam.main(
-            args.cameras, args.out, html_out=args.html,
+            args.cameras,
+            args.out,
+            html_out=args.html,
             max_seeds=args.max_seeds or crosscam.DEFAULT_MAX_SEEDS,
         )
     else:

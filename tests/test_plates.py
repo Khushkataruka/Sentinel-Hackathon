@@ -22,13 +22,13 @@ def test_a_genuinely_different_plate_is_further_than_a_misread_one():
     """The whole point. Both are one character apart from the target; only
     one of them is the same vehicle."""
     target = "GJ01DB1234"
-    misread = plates.similarity(target, "GJ010B1234")   # D -> 0, confusable
+    misread = plates.similarity(target, "GJ010B1234")  # D -> 0, confusable
     different = plates.similarity(target, "GJ01DB1235")  # 4 -> 5, not confusable
     assert misread > different
 
 
 def test_matching_respects_the_threshold():
-    assert plates.matches("GJ05BS4471", "GJ05B54471")        # S -> 5
+    assert plates.matches("GJ05BS4471", "GJ05B54471")  # S -> 5
     assert not plates.matches("GJ05BS4471", "MH12XY9988")
 
 

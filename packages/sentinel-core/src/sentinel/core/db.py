@@ -70,8 +70,9 @@ async def _init_connection(conn: asyncpg.Connection) -> None:
         # pgvector nor the migrations.
         if isinstance(exc, ValueError) and "unknown type" not in str(exc):
             raise
-        log.warning("pgvector_codec_unavailable", error=str(exc),
-                    hint="run migrations first: make migrate")
+        log.warning(
+            "pgvector_codec_unavailable", error=str(exc), hint="run migrations first: make migrate"
+        )
 
 
 def _check_dsn(dsn: str) -> None:
@@ -87,7 +88,7 @@ def _check_dsn(dsn: str) -> None:
     missing pgvector extension.
     """
     if not dsn.startswith(("postgres://", "postgresql://")):
-        return          # a bare name or a unix socket; asyncpg's problem, not ours
+        return  # a bare name or a unix socket; asyncpg's problem, not ours
     try:
         urlsplit(dsn)
     except ValueError as exc:

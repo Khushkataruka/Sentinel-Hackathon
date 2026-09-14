@@ -40,7 +40,10 @@ async def by_registration(body: RegistrationSearch, conn: DbTxn, user: User):
     between a match meaning something and a match meaning nothing.
     """
     result = await search_lib.by_registration(
-        conn, body.registration_no, since=body.since, until=body.until,
+        conn,
+        body.registration_no,
+        since=body.since,
+        until=body.until,
         requested_by=uuid.UUID(user.id),
     )
     return result.as_dict()
@@ -55,12 +58,20 @@ async def by_description(body: DescriptionSearch, conn: DbTxn, user: User):
     has no column.
     """
     description = VehicleDescription(
-        colour=body.colour, vtype=body.vtype, make=body.make, model=body.model,
-        caption_query=body.caption_query, district=body.district,
+        colour=body.colour,
+        vtype=body.vtype,
+        make=body.make,
+        model=body.model,
+        caption_query=body.caption_query,
+        district=body.district,
     )
     result = await search_lib.run(
-        conn, description, since=body.since, until=body.until,
-        camera_ids=body.camera_ids, requested_by=uuid.UUID(user.id),
+        conn,
+        description,
+        since=body.since,
+        until=body.until,
+        camera_ids=body.camera_ids,
+        requested_by=uuid.UUID(user.id),
         district=body.district,
     )
     return result.as_dict()
@@ -124,9 +135,14 @@ async def route_detail(route_id: uuid.UUID, conn: DbConn, user: User):
         "legs": [dict(r) for r in legs if r["seq"] > 0],
         "rejected_legs": [dict(r) for r in legs if r["seq"] < 0],
         "gaps": [
-            {"seq": r["seq"], "gap_s": r["gap_s"],
-             "from_camera": r["from_camera"], "to_camera": r["to_camera"]}
-            for r in legs if r["seq"] > 0 and r["gap_s"]
+            {
+                "seq": r["seq"],
+                "gap_s": r["gap_s"],
+                "from_camera": r["from_camera"],
+                "to_camera": r["to_camera"],
+            }
+            for r in legs
+            if r["seq"] > 0 and r["gap_s"]
         ],
     }
 
@@ -158,11 +174,20 @@ async def add_watchlist_entry(body: WatchlistEntryIn, conn: DbTxn, user: User):
              reason, created_by)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id
         """,
-        body.label, body.registration_no, body.colour, body.vtype, body.make,
-        body.model, body.priority, body.reason, uuid.UUID(user.id),
+        body.label,
+        body.registration_no,
+        body.colour,
+        body.vtype,
+        body.make,
+        body.model,
+        body.priority,
+        body.reason,
+        uuid.UUID(user.id),
     )
     report = await watchlist.backfill(
-        conn, entry_id, lookback_days=body.backfill_days,
+        conn,
+        entry_id,
+        lookback_days=body.backfill_days,
         requested_by=uuid.UUID(user.id),
     )
     return {"entry_id": str(entry_id), "backfill": report}

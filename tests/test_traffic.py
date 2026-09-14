@@ -37,7 +37,7 @@ def test_flow_counts_distinct_tracks_not_detections():
     acc = TrafficAccumulator("CAM-1", expected_fps=10.0, bucket_seconds=300)
     acc.observe_frame(datetime(2026, 9, 2, 10, 0, 0, tzinfo=UTC), [])
     acc.observe_track_end(1, "car", 4.0)
-    acc.observe_track_end(1, "car", 4.0)     # the same vehicle again
+    acc.observe_track_end(1, "car", 4.0)  # the same vehicle again
     acc.observe_track_end(2, "car", 6.0)
     summary = acc.close()
     counts = {c["class"]: c["vehicle_count"] for c in summary["counts"]}
@@ -55,8 +55,8 @@ def test_density_is_absent_without_measured_lane_geometry():
 
 
 def test_los_bands_read_per_lane():
-    assert band(20.0, 4) is LosBand.FREE       # 5 per lane
-    assert band(200.0, 2) is LosBand.JAM       # 100 per lane
+    assert band(20.0, 4) is LosBand.FREE  # 5 per lane
+    assert band(200.0, 2) is LosBand.JAM  # 100 per lane
     assert band(None, 3) is None
     assert band(30.0, None) is None
 

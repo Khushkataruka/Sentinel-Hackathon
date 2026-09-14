@@ -11,9 +11,11 @@ from sentinel.correlation import candidates as cand
 
 def candidate(read_id, seconds, score, matched):
     return Candidate(
-        read_id=read_id, camera_id="CAM-1",
+        read_id=read_id,
+        camera_id="CAM-1",
         seen_at=datetime(2026, 9, 2, 10, 0, 0, tzinfo=UTC) + timedelta(seconds=seconds),
-        score=score, matched_on=list(matched),
+        score=score,
+        matched_on=list(matched),
     )
 
 
@@ -50,8 +52,6 @@ async def test_an_empty_description_matches_nothing(db):
 
 async def test_a_described_vehicle_still_filters(db):
     """The guard must not disable the filter for real descriptions."""
-    await db.execute(
-        "SELECT 1"
-    )
+    await db.execute("SELECT 1")
     result = await cand.by_attributes(db, VehicleDescription(colour="__nosuchcolour__"))
-    assert result == []      # a real filter, applied, matching nothing
+    assert result == []  # a real filter, applied, matching nothing

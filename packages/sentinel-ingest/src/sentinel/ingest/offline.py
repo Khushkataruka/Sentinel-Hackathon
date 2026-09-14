@@ -157,7 +157,8 @@ def resolve(
                 path=path,
                 camera_id=str(entry.get("camera_id") or _slug(path.stem)),
                 name=str(entry.get("name") or path.stem),
-                lat=float(entry["lat"]) if has_position
+                lat=float(entry["lat"])
+                if has_position
                 else ORIGIN_LAT + DEG_PER_KM * leg_km * index,
                 lon=float(entry["lon"]) if has_position else ORIGIN_LON,
                 start_at=start_at,
@@ -165,8 +166,9 @@ def resolve(
             )
         )
 
-    duplicates = {s.camera_id for s in specs if
-                  sum(1 for o in specs if o.camera_id == s.camera_id) > 1}
+    duplicates = {
+        s.camera_id for s in specs if sum(1 for o in specs if o.camera_id == s.camera_id) > 1
+    }
     if duplicates:
         # Two files with the same stem would share a camera, and `sightings`
         # is UNIQUE (camera_id, track_id) -- the second file's tracks would
@@ -194,9 +196,7 @@ async def ensure_camera(conn: asyncpg.Connection, spec: VideoSpec) -> None:
     """
     department_id = await conn.fetchval("SELECT id FROM departments ORDER BY id LIMIT 1")
     if department_id is None:
-        raise RuntimeError(
-            "no departments row; run `python scripts/migrate.py --seed` first"
-        )
+        raise RuntimeError("no departments row; run `python scripts/migrate.py --seed` first")
 
     await conn.execute(
         """
@@ -209,10 +209,18 @@ async def ensure_camera(conn: asyncpg.Connection, spec: VideoSpec) -> None:
             location = EXCLUDED.location,
             enabled  = true
         """,
-        spec.camera_id, department_id, spec.name, spec.lat, spec.lon,
+        spec.camera_id,
+        department_id,
+        spec.name,
+        spec.lat,
+        spec.lon,
     )
     await audit.service(
-        conn, "ingest-offline", "camera.upsert", "camera", spec.camera_id,
+        conn,
+        "ingest-offline",
+        "camera.upsert",
+        "camera",
+        spec.camera_id,
         {"source": str(spec.path), "synthetic_position": spec.synthetic_position},
     )
 
@@ -231,9 +239,8 @@ async def ensure_profile(conn: asyncpg.Connection, spec: VideoSpec) -> None:
     not because the footage supports them.
     """
     violations = [
-        r["code"] for r in await conn.fetch(
-            "SELECT code FROM violation_types WHERE enabled ORDER BY code"
-        )
+        r["code"]
+        for r in await conn.fetch("SELECT code FROM violation_types WHERE enabled ORDER BY code")
     ]
 
     await conn.execute(
@@ -252,7 +259,9 @@ async def ensure_profile(conn: asyncpg.Connection, spec: VideoSpec) -> None:
             distortion           = EXCLUDED.distortion,
             measured_at          = now()
         """,
-        spec.camera_id, PERMITTED_ATTRIBUTES, violations,
+        spec.camera_id,
+        PERMITTED_ATTRIBUTES,
+        violations,
         settings.target_decode_fps,
         # A dict, not json.dumps of one: the pool registers a jsonb codec, so
         # a pre-encoded string is stored as a JSON *string* and comes back as
@@ -261,7 +270,11 @@ async def ensure_profile(conn: asyncpg.Connection, spec: VideoSpec) -> None:
         {"survey": "provisional; offline file run, not a section 6 survey"},
     )
     await audit.service(
-        conn, "ingest-offline", "camera_profile.upsert", "camera", spec.camera_id,
+        conn,
+        "ingest-offline",
+        "camera_profile.upsert",
+        "camera",
+        spec.camera_id,
         {"permitted_violations": violations, "provisional": True},
     )
 
@@ -285,7 +298,7 @@ async def clear_sightings(conn: asyncpg.Connection, camera_ids: list[str]) -> in
     if not camera_ids:
         return 0
 
-    doomed = ("SELECT read_id FROM sightings WHERE camera_id = ANY($1::text[])")
+    doomed = "SELECT read_id FROM sightings WHERE camera_id = ANY($1::text[])"
 
     # Alerts first: they reference both sightings and routes, and neither
     # reference cascades.
@@ -303,9 +316,7 @@ async def clear_sightings(conn: asyncpg.Connection, camera_ids: list[str]) -> in
         camera_ids,
     )
     await conn.execute(f"DELETE FROM sighting_events WHERE read_id IN ({doomed})", camera_ids)
-    await conn.execute(
-        "DELETE FROM pipeline_jobs WHERE camera_id = ANY($1::text[])", camera_ids
-    )
+    await conn.execute("DELETE FROM pipeline_jobs WHERE camera_id = ANY($1::text[])", camera_ids)
     result = await conn.execute(
         "DELETE FROM sightings WHERE camera_id = ANY($1::text[])", camera_ids
     )
@@ -350,19 +361,26 @@ class _SidecarWriter:
             scoped = worker.scoped_track_id(track)
             self.track_ids.add(scoped)
             x1, y1, x2, y2 = track.bbox
-            boxes.append({
-                "t": scoped,
-                "b": [int(x1), int(y1), int(x2), int(y2)],
-                "c": track.cls,
-                "s": round(float(track.score), 3),
-            })
+            boxes.append(
+                {
+                    "t": scoped,
+                    "b": [int(x1), int(y1), int(x2), int(y2)],
+                    "c": track.cls,
+                    "s": round(float(track.score), 3),
+                }
+            )
         self.frames += 1
-        self._fh.write(json.dumps({
-            "pts": round(frame.pts_s, 4),
-            "i": frame.index,
-            "at": frame.seen_at.isoformat(),
-            "boxes": boxes,
-        }) + "\n")
+        self._fh.write(
+            json.dumps(
+                {
+                    "pts": round(frame.pts_s, 4),
+                    "i": frame.index,
+                    "at": frame.seen_at.isoformat(),
+                    "boxes": boxes,
+                }
+            )
+            + "\n"
+        )
 
     def close(self, target_fps: float | None = None) -> None:
         """Record the rate the pass actually ran at, then close.
@@ -383,19 +401,30 @@ async def ingest_one(
     spec: VideoSpec, sidecar_dir: Path, detector=None, detect_model_id: int | None = None
 ) -> VideoResult:
     """Decode one file once, writing sightings and a track sidecar."""
-    adapter = FileAdapter({
-        "name": "offline",
-        "cameras": [{
-            "path": str(spec.path), "camera_id": spec.camera_id,
-            "name": spec.name, "lat": spec.lat, "lon": spec.lon,
-        }],
-    })
+    adapter = FileAdapter(
+        {
+            "name": "offline",
+            "cameras": [
+                {
+                    "path": str(spec.path),
+                    "camera_id": spec.camera_id,
+                    "name": spec.name,
+                    "lat": spec.lat,
+                    "lon": spec.lon,
+                }
+            ],
+        }
+    )
 
     sidecar = _SidecarWriter(sidecar_dir / f"{spec.path.stem}.jsonl", spec)
     worker = CameraWorker(
-        spec.camera_id, adapter,
-        detector=detector, detect_model_id=detect_model_id,
-        once=True, fixed_epoch=spec.start_at, observer=sidecar,
+        spec.camera_id,
+        adapter,
+        detector=detector,
+        detect_model_id=detect_model_id,
+        once=True,
+        fixed_epoch=spec.start_at,
+        observer=sidecar,
     )
     try:
         await worker.run()
@@ -430,9 +459,7 @@ async def run(
         for spec in specs:
             await ensure_camera(conn, spec)
             await ensure_profile(conn, spec)
-        removed = (
-            await clear_sightings(conn, [s.camera_id for s in specs]) if reset else 0
-        )
+        removed = await clear_sightings(conn, [s.camera_id for s in specs]) if reset else 0
     if removed:
         log.info("previous_sightings_cleared", count=removed)
 
@@ -448,13 +475,21 @@ async def run(
 
     results: list[VideoResult] = []
     for spec in specs:
-        log.info("offline_video_start", camera=spec.camera_id, path=str(spec.path),
-                 start_at=spec.start_at.isoformat())
+        log.info(
+            "offline_video_start",
+            camera=spec.camera_id,
+            path=str(spec.path),
+            start_at=spec.start_at.isoformat(),
+        )
         result = await ingest_one(spec, sidecar_dir, detector, detect_model_id)
         results.append(result)
-        log.info("offline_video_done", camera=spec.camera_id,
-                 sightings=result.sightings, frames=result.frames,
-                 tracks=result.tracks_seen)
+        log.info(
+            "offline_video_done",
+            camera=spec.camera_id,
+            sightings=result.sightings,
+            frames=result.frames,
+            tracks=result.tracks_seen,
+        )
 
     report = {
         "run_at": datetime.now(UTC).isoformat(),
@@ -477,8 +512,13 @@ async def run(
 
 
 def main(
-    paths: list[str], out: str, manifest_path: str | None, *,
-    reset: bool = True, leg_km: float = LEG_KM, leg_seconds: float = LEG_SECONDS,
+    paths: list[str],
+    out: str,
+    manifest_path: str | None,
+    *,
+    reset: bool = True,
+    leg_km: float = LEG_KM,
+    leg_seconds: float = LEG_SECONDS,
 ) -> int:
     """Entry point for `sentinel-ingest offline`."""
     from sentinel.core.db import close_pool
@@ -489,15 +529,18 @@ def main(
         raise SystemExit(f"no such file: {', '.join(str(m) for m in missing)}")
 
     manifest = (
-        json.loads(Path(manifest_path).read_text(encoding="utf-8"))
-        if manifest_path else None
+        json.loads(Path(manifest_path).read_text(encoding="utf-8")) if manifest_path else None
     )
 
     async def _go() -> dict[str, Any]:
         try:
             return await run(
-                files, Path(out).expanduser().resolve(), manifest=manifest,
-                reset=reset, leg_km=leg_km, leg_seconds=leg_seconds,
+                files,
+                Path(out).expanduser().resolve(),
+                manifest=manifest,
+                reset=reset,
+                leg_km=leg_km,
+                leg_seconds=leg_seconds,
             )
         finally:
             await close_pool()
@@ -515,6 +558,13 @@ def main(
 
 
 __all__ = [
-    "VideoSpec", "VideoResult", "resolve", "ensure_camera", "ensure_profile",
-    "clear_sightings", "ingest_one", "run", "main",
+    "VideoSpec",
+    "VideoResult",
+    "resolve",
+    "ensure_camera",
+    "ensure_profile",
+    "clear_sightings",
+    "ingest_one",
+    "run",
+    "main",
 ]

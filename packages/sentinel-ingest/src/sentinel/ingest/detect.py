@@ -39,7 +39,7 @@ VEHICLE_CLASSES = {"car", "motorcycle", "bus", "truck", "auto", "bicycle"}
 
 @dataclass
 class Detection:
-    bbox: tuple[int, int, int, int]     # x1, y1, x2, y2 in image pixels
+    bbox: tuple[int, int, int, int]  # x1, y1, x2, y2 in image pixels
     score: float
     cls: str
 
@@ -65,9 +65,7 @@ class Detector(Protocol):
 # ---------------------------------------------------------------------------
 
 
-def letterbox(
-    image: np.ndarray, size: int = 640
-) -> tuple[np.ndarray, float, tuple[int, int]]:
+def letterbox(image: np.ndarray, size: int = 640) -> tuple[np.ndarray, float, tuple[int, int]]:
     """Resize preserving aspect ratio, pad to square.
 
     Returns the padded image, the scale applied, and the (left, top) padding,
@@ -162,9 +160,7 @@ class OnnxYoloDetector:
         self.model_id = model_id
         self.input_size = input_size
 
-        self.session = ort.InferenceSession(
-            str(model_path), providers=settings.onnx_providers
-        )
+        self.session = ort.InferenceSession(str(model_path), providers=settings.onnx_providers)
         self.input_name = self.session.get_inputs()[0].name
 
         shape = self.session.get_inputs()[0].shape
@@ -172,7 +168,9 @@ class OnnxYoloDetector:
             self.input_size = int(shape[-1])
 
         log.info(
-            "detector_loaded", path=str(model_path), size=self.input_size,
+            "detector_loaded",
+            path=str(model_path),
+            size=self.input_size,
             providers=self.session.get_providers(),
         )
 
@@ -189,8 +187,10 @@ class OnnxYoloDetector:
         if predictions.shape[0] < predictions.shape[1]:
             predictions = predictions.T
 
-        if predictions.shape[1] >= 6 and predictions[:, 4].max() <= 1.0 and (
-            predictions.shape[1] - 5 == len(COCO_TO_CLASS)
+        if (
+            predictions.shape[1] >= 6
+            and predictions[:, 4].max() <= 1.0
+            and (predictions.shape[1] - 5 == len(COCO_TO_CLASS))
         ):
             objectness = predictions[:, 4]
             class_scores = predictions[:, 5:] * objectness[:, None]

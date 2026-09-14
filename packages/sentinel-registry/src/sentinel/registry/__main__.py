@@ -45,9 +45,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "serve":
         import uvicorn
 
-        uvicorn.run(
-            "sentinel.registry.app:app", host=args.host, port=args.port, reload=args.reload
-        )
+        uvicorn.run("sentinel.registry.app:app", host=args.host, port=args.port, reload=args.reload)
         return 0
 
     asyncio.run(_sync(args.department_id, args.base_url, args.adapter_id))

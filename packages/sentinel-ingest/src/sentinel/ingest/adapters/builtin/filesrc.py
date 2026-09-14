@@ -23,7 +23,7 @@ from sentinel.ingest.adapters.base import (
 
 class FileAdapter(BaseAdapter):
     name = "file"
-    supports_seek = True   # a local file is the one case where seeking is free
+    supports_seek = True  # a local file is the one case where seeking is free
 
     def __init__(self, config: dict[str, Any]) -> None:
         super().__init__(config)
@@ -35,8 +35,11 @@ class FileAdapter(BaseAdapter):
             path = Path(str(entry["path"])).expanduser()
             cam_id = str(entry.get("camera_id", path.stem))
             self._cameras[cam_id] = CameraRef(
-                camera_id=cam_id, name=str(entry.get("name", cam_id)), url=str(path),
-                lat=entry.get("lat"), lon=entry.get("lon"),
+                camera_id=cam_id,
+                name=str(entry.get("name", cam_id)),
+                url=str(path),
+                lat=entry.get("lat"),
+                lon=entry.get("lon"),
             )
 
         if not self._cameras and root.exists():

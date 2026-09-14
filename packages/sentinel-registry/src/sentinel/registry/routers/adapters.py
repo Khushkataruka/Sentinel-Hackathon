@@ -25,8 +25,12 @@ async def upsert_adapter(name: str, body: Adapter, conn: DbTxn, user: Admin):
     body.name = name
     adapter = await repo.upsert_adapter(conn, body)
     await audit.write(
-        conn, actor_kind=ActorKind.USER, actor_id=user.id, action="adapter.upsert",
-        object_type="adapter", object_id=name,
+        conn,
+        actor_kind=ActorKind.USER,
+        actor_id=user.id,
+        action="adapter.upsert",
+        object_type="adapter",
+        object_id=name,
         details={"driver": body.driver, "status": body.status.value},
     )
     return adapter
@@ -36,6 +40,10 @@ async def upsert_adapter(name: str, body: Adapter, conn: DbTxn, user: Admin):
 async def disable_adapter(name: str, conn: DbTxn, user: Admin):
     await conn.execute("UPDATE adapters SET status = 'disabled' WHERE name = $1", name)
     await audit.write(
-        conn, actor_kind=ActorKind.USER, actor_id=user.id, action="adapter.disable",
-        object_type="adapter", object_id=name,
+        conn,
+        actor_kind=ActorKind.USER,
+        actor_id=user.id,
+        action="adapter.disable",
+        object_type="adapter",
+        object_id=name,
     )

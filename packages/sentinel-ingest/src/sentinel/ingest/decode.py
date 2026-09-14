@@ -26,9 +26,7 @@ import os
 
 # Must be set before cv2 is imported: OpenCV reads it when the FFmpeg backend
 # initialises. Setting it later has no effect, which is a fun afternoon.
-os.environ.setdefault(
-    "OPENCV_FFMPEG_CAPTURE_OPTIONS", "rtsp_transport;tcp|stimeout;5000000"
-)
+os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS", "rtsp_transport;tcp|stimeout;5000000")
 
 import random  # noqa: E402
 import time  # noqa: E402
@@ -58,10 +56,10 @@ class Frame:
     """One decoded frame, with the only timestamp anyone should use."""
 
     image: np.ndarray
-    seen_at: datetime          # wall clock, derived from PTS
-    pts_s: float               # raw presentation timestamp, seconds
-    dt_s: float                # seconds since the previous frame, from PTS
-    index: int                 # frames since connect; for logging only
+    seen_at: datetime  # wall clock, derived from PTS
+    pts_s: float  # raw presentation timestamp, seconds
+    dt_s: float  # seconds since the previous frame, from PTS
+    index: int  # frames since connect; for logging only
     discontinuity: bool = False  # the recording looped or the camera rebooted
 
     @property
@@ -142,11 +140,12 @@ class CameraStream:
 
         self._cap = cap
         self._consecutive_errors = 0
-        self.clock.reset()          # the replayed GOP must not be timed
+        self.clock.reset()  # the replayed GOP must not be timed
         self._last_emitted_pts = None
         self._frames_since_connect = 0
-        log.info("stream_open", camera=self.camera_id, url=safe_url,
-                 transport=self.handle.transport)
+        log.info(
+            "stream_open", camera=self.camera_id, url=safe_url, transport=self.handle.transport
+        )
 
     def _reconnect(self) -> None:
         self.release()
@@ -155,8 +154,12 @@ class CameraStream:
         # a gateway restart.
         delay = min(self._backoff, settings.reconnect_backoff_max_s)
         delay *= 0.75 + random.random() * 0.5
-        log.warning("stream_reconnect", camera=self.camera_id,
-                    attempt=self.reconnects, sleep_s=round(delay, 1))
+        log.warning(
+            "stream_reconnect",
+            camera=self.camera_id,
+            attempt=self.reconnects,
+            sleep_s=round(delay, 1),
+        )
         time.sleep(delay)
         self._backoff = min(self._backoff * 2, settings.reconnect_backoff_max_s)
 
@@ -177,7 +180,7 @@ class CameraStream:
         """Presentation timestamp of the frame just read, in seconds."""
         assert self._cap is not None
         ms = self._cap.get(cv2.CAP_PROP_POS_MSEC)
-        if ms is None or ms <= 0 or ms != ms:      # 0, negative or NaN
+        if ms is None or ms <= 0 or ms != ms:  # 0, negative or NaN
             # Some backends report no PTS on the first frames after a join.
             # Fall back to the frame position over the container's nominal
             # rate for those few frames only; the clock re-anchors as soon as
@@ -221,7 +224,7 @@ class CameraStream:
                     self._reconnect()
                     continue
 
-            ok, image = self._cap.read()   # type: ignore[union-attr]
+            ok, image = self._cap.read()  # type: ignore[union-attr]
 
             if not ok or image is None:
                 if self.once:
@@ -233,8 +236,9 @@ class CameraStream:
                     # frames_decoded so a truncated pass is visible. If a
                     # damaged file ever needs to survive this, count
                     # consecutive failures here the way the live path does.
-                    log.info("stream_eof", camera=self.camera_id,
-                             frames_decoded=self.frames_decoded)
+                    log.info(
+                        "stream_eof", camera=self.camera_id, frames_decoded=self.frames_decoded
+                    )
                     return
 
                 # A failed read is either a gap, a decoder warning at join, or
@@ -246,8 +250,11 @@ class CameraStream:
                 if self._consecutive_errors == 1:
                     log.debug("decode_hiccup", camera=self.camera_id)
                 if self._consecutive_errors >= settings.max_consecutive_decode_errors:
-                    log.warning("stream_lost", camera=self.camera_id,
-                                consecutive_errors=self._consecutive_errors)
+                    log.warning(
+                        "stream_lost",
+                        camera=self.camera_id,
+                        consecutive_errors=self._consecutive_errors,
+                    )
                     self._reconnect()
                 else:
                     time.sleep(0.02)
@@ -267,8 +274,12 @@ class CameraStream:
                 # to real timestamps looks like a discontinuity. There is no
                 # tracker state to flush this early anyway, and a spurious
                 # cut here would corrupt a loop-period measurement.
-                log.debug("clock_settling", camera=self.camera_id,
-                          frame=self._frames_since_connect, pts_s=round(pts_s, 3))
+                log.debug(
+                    "clock_settling",
+                    camera=self.camera_id,
+                    frame=self._frames_since_connect,
+                    pts_s=round(pts_s, 3),
+                )
                 continue
 
             if cut:
@@ -276,9 +287,12 @@ class CameraStream:
                 # re-id galleries, track ids -- must recover from a hard cut
                 # rather than assume infinite continuity. We surface it and
                 # let the worker flush.
-                log.info("scene_discontinuity", camera=self.camera_id,
-                         pts_s=round(pts_s, 3),
-                         total=self.clock.discontinuities)
+                log.info(
+                    "scene_discontinuity",
+                    camera=self.camera_id,
+                    pts_s=round(pts_s, 3),
+                    total=self.clock.discontinuities,
+                )
                 self._last_emitted_pts = None
                 self.frames_emitted += 1
                 yield Frame(image, seen_at, pts_s, 0.0, self.frames_decoded, True)

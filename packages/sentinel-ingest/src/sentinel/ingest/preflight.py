@@ -57,8 +57,7 @@ class Preflight:
         return {k: v for k, v in self.__dict__.items()}
 
 
-def run(handle: StreamHandle, seconds: float = 180.0,
-        target_fps: float | None = None) -> Preflight:
+def run(handle: StreamHandle, seconds: float = 180.0, target_fps: float | None = None) -> Preflight:
     """Watch one camera and report what it actually does.
 
     Three minutes is the useful default: long enough to see a loop point on
@@ -168,8 +167,11 @@ def render(result: Preflight) -> str:
         f"inter-frame dt    min {result.dt_min}  median {result.dt_median}  max {result.dt_max}",
         f"pts resets        {result.pts_resets} {result.pts_reset_at or ''}",
         "loop period       "
-        + (f"{result.loop_period_s}s  <- put this in camera_profiles.loop_period_s"
-           if result.loop_period_s else "UNKNOWN -- see notes"),
+        + (
+            f"{result.loop_period_s}s  <- put this in camera_profiles.loop_period_s"
+            if result.loop_period_s
+            else "UNKNOWN -- see notes"
+        ),
         f"decode errors     {result.decode_errors}",
         f"reconnects        {result.reconnects}",
         "",

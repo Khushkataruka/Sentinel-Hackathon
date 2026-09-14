@@ -1,4 +1,12 @@
-from sentinel.api.routers import alerts, evidence, mapview, search, traffic, violations, live_sightings
+from sentinel.api.routers import (
+    alerts,
+    evidence,
+    mapview,
+    search,
+    traffic,
+    violations,
+    live_sightings,
+)
 
 ROUTERS = [
     mapview.router,

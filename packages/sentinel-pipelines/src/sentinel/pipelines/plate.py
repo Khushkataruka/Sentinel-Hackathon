@@ -33,9 +33,7 @@ class PlateWorker(PipelineWorker):
     async def setup(self) -> None:
         self.reader = anpr.load_plate_reader()
 
-    async def process(
-        self, conn, job: queue.Job, crop: np.ndarray
-    ) -> dict[str, Any] | None:
+    async def process(self, conn, job: queue.Job, crop: np.ndarray) -> dict[str, Any] | None:
         reads = self.reader(crop, top_k=TOP_K)
         # Format validation rejects a large amount of OCR garbage before it
         # reaches the database.
@@ -51,7 +49,9 @@ class PlateWorker(PipelineWorker):
 
         await conn.execute(
             "UPDATE sightings SET plate_text = $2, plate_conf = $3 WHERE read_id = $1",
-            job.read_id, best.text, best.confidence,
+            job.read_id,
+            best.text,
+            best.confidence,
         )
         # Rewrite rather than append: a retried job must not stack duplicate
         # ranks against the primary key.
@@ -62,7 +62,10 @@ class PlateWorker(PipelineWorker):
                 INSERT INTO plate_hypotheses (read_id, rank, plate, confidence)
                 VALUES ($1, $2, $3, $4)
                 """,
-                job.read_id, rank, read.text, read.confidence,
+                job.read_id,
+                rank,
+                read.text,
+                read.confidence,
             )
 
         return {"best": best.text, "conf": best.confidence, "hypotheses": len(reads)}

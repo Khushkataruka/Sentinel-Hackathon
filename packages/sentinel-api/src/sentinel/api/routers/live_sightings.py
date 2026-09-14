@@ -5,6 +5,7 @@ from sentinel.api.deps import DbConn, User
 
 router = APIRouter(tags=["live_sightings"])
 
+
 @router.get("/live_sightings")
 async def get_sightings(
     conn: DbConn,

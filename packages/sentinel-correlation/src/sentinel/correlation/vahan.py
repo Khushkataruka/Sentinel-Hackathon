@@ -96,7 +96,11 @@ async def population(
            AND ($4 = 'any' OR lower(make) = $4)
            AND ($5 = 'any' OR lower(model) = $5)
         """,
-        district, colour, vtype, make, model,
+        district,
+        colour,
+        vtype,
+        make,
+        model,
     )
     if counted:
         return int(counted)

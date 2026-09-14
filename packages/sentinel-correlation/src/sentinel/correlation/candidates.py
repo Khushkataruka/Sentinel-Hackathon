@@ -77,13 +77,23 @@ async def by_attributes(
          ORDER BY s.seen_at DESC
          LIMIT $8
         """,
-        description.colour, description.vtype, description.make, description.model,
-        since, until, camera_ids, limit or settings.candidate_limit,
+        description.colour,
+        description.vtype,
+        description.make,
+        description.model,
+        since,
+        until,
+        camera_ids,
+        limit or settings.candidate_limit,
     )
     return [
         Candidate(
-            read_id=r["read_id"], camera_id=r["camera_id"], seen_at=r["seen_at"],
-            score=0.0, matched_on=["attribute"], plate_text=r["plate_text"],
+            read_id=r["read_id"],
+            camera_id=r["camera_id"],
+            seen_at=r["seen_at"],
+            score=0.0,
+            matched_on=["attribute"],
+            plate_text=r["plate_text"],
             trust_level=float(r["trust_level"]),
         )
         for r in rows
@@ -122,14 +132,21 @@ async def by_embedding(
          ORDER BY s.embedding <=> $1::vector
          LIMIT $5
         """,
-        encode_vector(embedding), restrict_to, since, until,
+        encode_vector(embedding),
+        restrict_to,
+        since,
+        until,
         limit or settings.knn_limit,
     )
     return [
         Candidate(
-            read_id=r["read_id"], camera_id=r["camera_id"], seen_at=r["seen_at"],
-            score=float(r["similarity"]), matched_on=["vector"],
-            plate_text=r["plate_text"], trust_level=float(r["trust_level"]),
+            read_id=r["read_id"],
+            camera_id=r["camera_id"],
+            seen_at=r["seen_at"],
+            score=float(r["similarity"]),
+            matched_on=["vector"],
+            plate_text=r["plate_text"],
+            trust_level=float(r["trust_level"]),
         )
         for r in rows
     ]
@@ -168,13 +185,20 @@ async def by_caption(
              ORDER BY s.caption_embedding <=> $1::vector
              LIMIT $4
             """,
-            encode_vector(caption_embedding), since, until, limit,
+            encode_vector(caption_embedding),
+            since,
+            until,
+            limit,
         )
         for r in rows:
             results[r["read_id"]] = Candidate(
-                read_id=r["read_id"], camera_id=r["camera_id"], seen_at=r["seen_at"],
-                score=float(r["similarity"]), matched_on=["caption"],
-                plate_text=r["plate_text"], trust_level=float(r["trust_level"]),
+                read_id=r["read_id"],
+                camera_id=r["camera_id"],
+                seen_at=r["seen_at"],
+                score=float(r["similarity"]),
+                matched_on=["caption"],
+                plate_text=r["plate_text"],
+                trust_level=float(r["trust_level"]),
             )
 
     if caption_text:
@@ -191,7 +215,10 @@ async def by_caption(
              ORDER BY sim DESC
              LIMIT $4
             """,
-            caption_text, since, until, limit,
+            caption_text,
+            since,
+            until,
+            limit,
         )
         for r in rows:
             existing = results.get(r["read_id"])
@@ -201,9 +228,13 @@ async def by_caption(
                     existing.matched_on.append("caption_text")
             else:
                 results[r["read_id"]] = Candidate(
-                    read_id=r["read_id"], camera_id=r["camera_id"], seen_at=r["seen_at"],
-                    score=float(r["sim"]), matched_on=["caption_text"],
-                    plate_text=r["plate_text"], trust_level=float(r["trust_level"]),
+                    read_id=r["read_id"],
+                    camera_id=r["camera_id"],
+                    seen_at=r["seen_at"],
+                    score=float(r["sim"]),
+                    matched_on=["caption_text"],
+                    plate_text=r["plate_text"],
+                    trust_level=float(r["trust_level"]),
                 )
 
     return list(results.values())
@@ -238,7 +269,10 @@ async def by_plate(
            AND ($3::timestamptz IS NULL OR s.seen_at <= $3)
          LIMIT $4
         """,
-        pattern, since, until, (limit or settings.candidate_limit) * 4,
+        pattern,
+        since,
+        until,
+        (limit or settings.candidate_limit) * 4,
     )
 
     best: dict[uuid.UUID, Candidate] = {}
@@ -249,8 +283,12 @@ async def by_plate(
         existing = best.get(r["read_id"])
         if existing is None or score > existing.score:
             best[r["read_id"]] = Candidate(
-                read_id=r["read_id"], camera_id=r["camera_id"], seen_at=r["seen_at"],
-                score=score, matched_on=["plate"], plate_text=r["plate"],
+                read_id=r["read_id"],
+                camera_id=r["camera_id"],
+                seen_at=r["seen_at"],
+                score=score,
+                matched_on=["plate"],
+                plate_text=r["plate"],
                 trust_level=float(r["trust_level"]),
             )
     return list(best.values())

@@ -57,9 +57,7 @@ class ViolateWorker(PipelineWorker):
         )
         return {r["code"]: dict(r) for r in rows}
 
-    async def process(
-        self, conn, job: queue.Job, crop: np.ndarray
-    ) -> dict[str, Any] | None:
+    async def process(self, conn, job: queue.Job, crop: np.ndarray) -> dict[str, Any] | None:
         permitted = job.payload.get("permitted_violations", [])
         vehicle_class = job.payload.get("class", "car")
 
@@ -72,7 +70,8 @@ class ViolateWorker(PipelineWorker):
         # Intersect the camera's permitted types with the types that apply to
         # this vehicle class. An empty applies_to means any class.
         applicable = [
-            code for code, rule in rules.items()
+            code
+            for code, rule in rules.items()
             if not rule["applies_to"] or vehicle_class in rule["applies_to"]
         ]
         if not applicable:
@@ -89,8 +88,7 @@ class ViolateWorker(PipelineWorker):
         height, width = crop.shape[:2]
         if not self.detector.is_stub and max(height, width) < settings.violation_min_crop_px:
             await self._set_status(conn, job.read_id, PipelineStatus.SKIPPED)
-            return {"skipped": f"crop {width}x{height} under "
-                               f"{settings.violation_min_crop_px}px"}
+            return {"skipped": f"crop {width}x{height} under {settings.violation_min_crop_px}px"}
 
         sighting = await conn.fetchrow(
             "SELECT seen_at, track_start_at, track_end_at FROM sightings WHERE read_id = $1",
@@ -101,9 +99,7 @@ class ViolateWorker(PipelineWorker):
         riders: list[violation_models.RiderBox] = []
         if vehicle_class in self.TWO_WHEELER:
             riders = self.rider_detector(crop)
-            await conn.execute(
-                "DELETE FROM sighting_riders WHERE read_id = $1", job.read_id
-            )
+            await conn.execute("DELETE FROM sighting_riders WHERE read_id = $1", job.read_id)
             for rider in riders:
                 await conn.execute(
                     """
@@ -111,8 +107,12 @@ class ViolateWorker(PipelineWorker):
                         (read_id, slot, bbox, helmet, helmet_conf, detector_id)
                     VALUES ($1, $2, $3, $4, $5, $6)
                     """,
-                    job.read_id, rider.slot, list(rider.bbox),
-                    rider.helmet, rider.helmet_conf, self.model_id,
+                    job.read_id,
+                    rider.slot,
+                    list(rider.bbox),
+                    rider.helmet,
+                    rider.helmet_conf,
+                    self.model_id,
                 )
 
         findings = self.detector(
@@ -169,7 +169,8 @@ class ViolateWorker(PipelineWorker):
             evidence_ref = None
             if finding.bbox:
                 path = media.evidence_path(
-                    job.camera_id, sighting["seen_at"],
+                    job.camera_id,
+                    sighting["seen_at"],
                     f"{job.read_id}-{finding.violation_type}",
                 )
                 import cv2
@@ -186,21 +187,30 @@ class ViolateWorker(PipelineWorker):
                         detector_id, review_status, details)
                     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
                     """,
-                    job.read_id, job.camera_id, finding.violation_type, rider_slot,
-                    finding.confidence, sighting["seen_at"],
+                    job.read_id,
+                    job.camera_id,
+                    finding.violation_type,
+                    rider_slot,
+                    finding.confidence,
+                    sighting["seen_at"],
                     sighting["track_start_at"] if rule["is_temporal"] else None,
                     sighting["track_end_at"] if rule["is_temporal"] else None,
                     evidence_ref,
                     list(finding.bbox) if finding.bbox else None,
-                    self.model_id, review_status.value, finding.details,
+                    self.model_id,
+                    review_status.value,
+                    finding.details,
                 )
                 written += 1
             except Exception as exc:
                 # The permitted-violations trigger. Loud, because it means a
                 # pipeline tried to assert something the survey forbade.
                 log.error(
-                    "violation_rejected", read_id=str(job.read_id),
-                    camera=job.camera_id, type=finding.violation_type, error=str(exc),
+                    "violation_rejected",
+                    read_id=str(job.read_id),
+                    camera=job.camera_id,
+                    type=finding.violation_type,
+                    error=str(exc),
                 )
                 raise
 

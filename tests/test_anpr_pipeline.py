@@ -183,9 +183,13 @@ async def test_plate_worker_process_with_valid_reads():
 
     mock_conn.execute.assert_any_call(
         "UPDATE sightings SET plate_text = $2, plate_conf = $3 WHERE read_id = $1",
-        job.read_id, "GJ01AB1234", 0.95,
+        job.read_id,
+        "GJ01AB1234",
+        0.95,
     )
-    mock_conn.execute.assert_any_call("DELETE FROM plate_hypotheses WHERE read_id = $1", job.read_id)
+    mock_conn.execute.assert_any_call(
+        "DELETE FROM plate_hypotheses WHERE read_id = $1", job.read_id
+    )
 
 
 @pytest.mark.asyncio

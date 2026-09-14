@@ -42,9 +42,7 @@ class Settings(BaseSettings):
     #: Tried in order after catalogue_path 404s. The grid moved from
     #: /api/ingest to /cameras.json; both estates exist in the wild and a
     #: sync that dies on a renamed path is a bad trade for one list entry.
-    sentinel_catalogue_fallback_paths: list[str] = Field(
-        default_factory=lambda: ["/api/ingest"]
-    )
+    sentinel_catalogue_fallback_paths: list[str] = Field(default_factory=lambda: ["/api/ingest"])
     sentinel_http_timeout: float = 15.0
     sentinel_token: str = ""
     sentinel_cookie: str = ""
@@ -106,11 +104,11 @@ class Settings(BaseSettings):
     #: sits entirely below it, which is why that run reports skipped.
     violation_min_crop_px: int = 96
 
-    embedding_dim: int = 512       # MUST equal sightings.embedding's declared dim
+    embedding_dim: int = 512  # MUST equal sightings.embedding's declared dim
     caption_embedding_dim: int = 384
 
     # -- ingest ------------------------------------------------------------
-    target_decode_fps: float = 10.0     # tracking needs 8-12; the archive needs 1
+    target_decode_fps: float = 10.0  # tracking needs 8-12; the archive needs 1
     archive_fps: float = 1.0
 
     min_track_frames: int = 3
@@ -128,9 +126,9 @@ class Settings(BaseSettings):
 
     # -- queues ------------------------------------------------------------
     queue_claim_batch: int = 8
-    queue_lock_timeout_s: float = 300.0   # a lock older than this is reclaimed
+    queue_lock_timeout_s: float = 300.0  # a lock older than this is reclaimed
     queue_poll_interval_s: float = 0.5
-    queue_max_depth: int = 20000          # per crop pipeline, before shedding
+    queue_max_depth: int = 20000  # per crop pipeline, before shedding
 
     # -- traffic -----------------------------------------------------------
     traffic_bucket_seconds: int = 300

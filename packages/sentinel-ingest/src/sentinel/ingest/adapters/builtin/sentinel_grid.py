@@ -57,13 +57,11 @@ def _pick(entry: dict[str, Any], *keys: str, default: Any = None) -> Any:
 
 class SentinelGridAdapter(BaseAdapter):
     name = "sentinel-grid"
-    supports_seek = False   # the guide is explicit: no seeking, no byte ranges
+    supports_seek = False  # the guide is explicit: no seeking, no byte ranges
 
     def __init__(self, config: dict[str, Any]) -> None:
         super().__init__(config)
-        self.base_url = str(
-            config.get("base_url") or settings.sentinel_base_url or ""
-        ).rstrip("/")
+        self.base_url = str(config.get("base_url") or settings.sentinel_base_url or "").rstrip("/")
         if not self.base_url:
             raise AdapterError("sentinel-grid needs base_url in adapter.toml or the env")
         self.timeout = float(config.get("timeout_s", settings.sentinel_http_timeout))
@@ -151,18 +149,22 @@ class SentinelGridAdapter(BaseAdapter):
             # actually serve them. All three stay credential-free: open()
             # attaches the password, and only in the handle it returns.
             rtsp = streamurl.retarget(
-                streamurl.strip_credentials(str(
-                    _pick(entry, "rtsp", "rtsp_url", "rtspUrl")
-                    or streamurl.rtsp_url(cam_id, self._media_host(), self.rtsp_port)
-                )),
-                self.media_host or None, self.rtsp_port,
+                streamurl.strip_credentials(
+                    str(
+                        _pick(entry, "rtsp", "rtsp_url", "rtspUrl")
+                        or streamurl.rtsp_url(cam_id, self._media_host(), self.rtsp_port)
+                    )
+                ),
+                self.media_host or None,
+                self.rtsp_port,
             )
             whep_raw = _pick(entry, "whep", "whep_url", "webrtc", "webrtc_url")
             whep = streamurl.retarget(
-                streamurl.strip_credentials(str(
-                    whep_raw or streamurl.whep_url(cam_id, self._media_host(), self.whep_port)
-                )),
-                self.media_host or None, self.whep_port,
+                streamurl.strip_credentials(
+                    str(whep_raw or streamurl.whep_url(cam_id, self._media_host(), self.whep_port))
+                ),
+                self.media_host or None,
+                self.whep_port,
             )
             # HLS is the one endpoint the CDN can carry, so it keeps the
             # catalogue's host and is gated by the session, not by userinfo.
@@ -228,17 +230,21 @@ class SentinelGridAdapter(BaseAdapter):
                 if cookie:
                     options["headers"] = f"Cookie: {cookie}"
                 return StreamHandle(
-                    camera_id=camera_id, url=url,
+                    camera_id=camera_id,
+                    url=url,
                     # Not RTSP, so the transport field says how the fetch is
                     # done rather than which RTSP interleaving to force. HLS
                     # is TCP either way, and the loader's TCP check only
                     # looks at rtsp:// URLs.
-                    transport="tcp", codec=ref.codec, options=options,
+                    transport="tcp",
+                    codec=ref.codec,
+                    options=options,
                 )
 
             url = streamurl.with_credentials(
                 str(ref.metadata.get("rtsp") or ref.url),
-                settings.grid_email, settings.grid_password,
+                settings.grid_email,
+                settings.grid_password,
             )
             if not settings.grid_email or not settings.grid_password:
                 # Not fatal: a grid with an open gateway still works, and a
@@ -246,9 +252,10 @@ class SentinelGridAdapter(BaseAdapter):
                 # exception. But this is the shape of an auth failure that
                 # otherwise surfaces as a silent 401 at connect.
                 log.warning(
-                    "grid_credentials_missing", camera=camera_id,
+                    "grid_credentials_missing",
+                    camera=camera_id,
                     detail="RTSP authenticates per connection; set "
-                           "SENTINEL_GRID_EMAIL and SENTINEL_GRID_PASSWORD",
+                    "SENTINEL_GRID_EMAIL and SENTINEL_GRID_PASSWORD",
                 )
             return StreamHandle(
                 camera_id=camera_id,

@@ -41,7 +41,10 @@ async def state(
          ORDER BY bucket_start DESC
          LIMIT $4
         """,  # noqa: S608 - table name is from a fixed two-value branch
-        camera_id, since, until, limit,
+        camera_id,
+        since,
+        until,
+        limit,
     )
     return [dict(r) for r in rows]
 
@@ -79,7 +82,10 @@ async def counts(
          ORDER BY c.bucket_start DESC, c.class
          LIMIT $4
         """,
-        camera_id, since, until, limit,
+        camera_id,
+        since,
+        until,
+        limit,
     )
     return [dict(r) for r in rows]
 

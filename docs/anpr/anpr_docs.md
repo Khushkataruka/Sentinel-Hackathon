@@ -106,6 +106,7 @@ class OCREngine(str, Enum):
     EASYOCR = "easyocr"
     TESSERACT = "tesseract"
 
+
 #: Global variable in sentinel.pipelines.models.anpr
 OCR_ENGINE: OCREngine = OCREngine.TESSERACT
 ```
@@ -140,7 +141,9 @@ ENABLE_VALIDATION: bool = True  # Set to False to disable regex/state checks and
 ### 4.3. `SAVE_ARTIFACTS` (Global Variable)
 Located in `packages/sentinel-pipelines/src/sentinel/pipelines/models/anpr.py` and `example/anpr/script.py`:
 ```python
-SAVE_ARTIFACTS: bool = True  # Set to False to disable image writing to disk (JSON metadata is always saved)
+SAVE_ARTIFACTS: bool = (
+    True  # Set to False to disable image writing to disk (JSON metadata is always saved)
+)
 ```
 * **Performance Note & Warning**:
   * Writing image artifacts (annotated frames, cropped vehicle/plate cutouts) to disk involves substantial I/O overhead.
@@ -162,10 +165,10 @@ SAVE_ARTIFACTS: bool = True  # Set to False to disable image writing to disk (JS
 ```python
 @dataclass
 class PlateRead:
-    text: str                               # Sanitized plate string (e.g. 'GJ01AB1234')
-    confidence: float                       # Combined score (lp_score * ocr_prob)
-    rank: int                               # Rank order (1 = highest confidence)
-    valid_format: bool                      # Passed Indian format validation
+    text: str  # Sanitized plate string (e.g. 'GJ01AB1234')
+    confidence: float  # Combined score (lp_score * ocr_prob)
+    rank: int  # Rank order (1 = highest confidence)
+    valid_format: bool  # Passed Indian format validation
     bbox: tuple[int, int, int, int] | None  # Local (lx1, ly1, lx2, ly2) bounding box
 ```
 

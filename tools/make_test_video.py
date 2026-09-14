@@ -5,6 +5,7 @@ on screen to dissociate. A real 24/7 traffic recording always has vehicles
 in frame, including at the moment it wraps -- that is precisely why the loop
 is dangerous. This one does too.
 """
+
 import sys
 
 import cv2
@@ -22,11 +23,16 @@ for lane_i, (y, h) in enumerate(lanes):
     t = -3.0 - lane_i * 1.5
     while t < SECONDS + 4:
         speed = float(rng.uniform(90, 210))
-        vehicles.append({
-            "t0": t, "y": y + int(rng.integers(-8, 9)), "h": h,
-            "w": int(rng.integers(70, 130)), "speed": speed,
-            "colour": tuple(int(c) for c in rng.integers(50, 230, 3)),
-        })
+        vehicles.append(
+            {
+                "t0": t,
+                "y": y + int(rng.integers(-8, 9)),
+                "h": h,
+                "w": int(rng.integers(70, 130)),
+                "speed": speed,
+                "colour": tuple(int(c) for c in rng.integers(50, 230, 3)),
+            }
+        )
         t += float(rng.uniform(1.6, 3.4))
 
 for frame_no in range(FPS * SECONDS):
@@ -48,10 +54,12 @@ for frame_no in range(FPS * SECONDS):
     writer.write(img)
 writer.release()
 
+
 def on_screen(t):
-    return sum(
-        1 for v in vehicles
-        if -v["w"] <= int((t - v["t0"]) * v["speed"]) - v["w"] <= W
-    )
-print(f"{path}: {FPS*SECONDS} frames, {len(vehicles)} vehicles; "
-      f"on screen at t=0.0s: {on_screen(0.0)}, at t=19.9s: {on_screen(19.9)}")
+    return sum(1 for v in vehicles if -v["w"] <= int((t - v["t0"]) * v["speed"]) - v["w"] <= W)
+
+
+print(
+    f"{path}: {FPS * SECONDS} frames, {len(vehicles)} vehicles; "
+    f"on screen at t=0.0s: {on_screen(0.0)}, at t=19.9s: {on_screen(19.9)}"
+)

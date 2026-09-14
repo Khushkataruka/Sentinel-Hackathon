@@ -9,6 +9,7 @@ a tool that rewrites it would make the document wrong.
     python scripts/migrate.py --seed    apply, then load db/seed/dev_seed.sql
     python scripts/migrate.py --status  list applied and pending
 """
+
 from __future__ import annotations
 
 import argparse

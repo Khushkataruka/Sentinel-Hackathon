@@ -21,6 +21,7 @@ from sentinel.core.logging import configure_logging, get_logger
 
 log = get_logger(__name__)
 
+
 def _find_frontend_dist() -> Path | None:
     """Locate the built frontend by walking up to the repo root.
 
@@ -75,9 +76,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.add_middleware(
-    CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
-)
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 for router in ROUTERS:
     app.include_router(router)
@@ -100,5 +99,5 @@ async def client_config():
 
 if FRONTEND_DIST is not None:
     app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
-else:   # pragma: no cover
+else:  # pragma: no cover
     log.info("frontend_not_built", hint="run npm install && npm run build in frontend/")

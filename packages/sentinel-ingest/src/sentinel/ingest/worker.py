@@ -129,8 +129,11 @@ class CameraWorker:
             self.gating = await writer.load_gating(conn, self.camera_id)
 
         if self.gating is None:
-            log.warning("camera_unsurveyed", camera=self.camera_id,
-                        action="skipping; record a capability profile first")
+            log.warning(
+                "camera_unsurveyed",
+                camera=self.camera_id,
+                action="skipping; record a capability profile first",
+            )
             return False
 
         self.tracker = ByteTrack()
@@ -140,8 +143,7 @@ class CameraWorker:
             density_viable=self.gating.density_viable,
             lane_polygon_px=_parse_polygon_wkt(self.gating.lane_polygon_wkt),
             lane_count=self.gating.lane_count,
-            lane_length_m=float((self.gating.distortion or {}).get("lane_length_m", 0))
-            or None,
+            lane_length_m=float((self.gating.distortion or {}).get("lane_length_m", 0)) or None,
         )
         return True
 
@@ -235,35 +237,41 @@ class CameraWorker:
             # Outside the transaction: a file write cannot be rolled back.
             # The name is unique, so failure means cleanup, not collision.
             try:
-                crop_ref = writer.write_crop(
-                    self.camera_id, seen_at, read_id, best.crop
-                )
+                crop_ref = writer.write_crop(self.camera_id, seen_at, read_id, best.crop)
             except Exception as exc:
-                log.error("crop_write_failed", camera=self.camera_id,
-                          track=track.track_id, error=str(exc))
+                log.error(
+                    "crop_write_failed", camera=self.camera_id, track=track.track_id, error=str(exc)
+                )
                 continue
 
             written = False
             try:
                 async with transaction() as conn:
-                    written = await writer.write_sighting(
-                        conn,
-                        read_id=read_id,
-                        camera_id=self.camera_id,
-                        track_id=self.scoped_track_id(track),
-                        seen_at=seen_at,
-                        track_start_at=at_pts(track.start_pts_s),
-                        track_end_at=at_pts(track.last_pts_s),
-                        bbox=best.bbox,
-                        crop_bbox=best.crop_bbox,
-                        cls=track.cls,
-                        crop_ref=crop_ref,
-                        detect_model_id=self.detect_model_id,
-                        gating=self.gating,
-                    ) is not None
+                    written = (
+                        await writer.write_sighting(
+                            conn,
+                            read_id=read_id,
+                            camera_id=self.camera_id,
+                            track_id=self.scoped_track_id(track),
+                            seen_at=seen_at,
+                            track_start_at=at_pts(track.start_pts_s),
+                            track_end_at=at_pts(track.last_pts_s),
+                            bbox=best.bbox,
+                            crop_bbox=best.crop_bbox,
+                            cls=track.cls,
+                            crop_ref=crop_ref,
+                            detect_model_id=self.detect_model_id,
+                            gating=self.gating,
+                        )
+                        is not None
+                    )
             except Exception as exc:
-                log.error("sighting_write_failed", camera=self.camera_id,
-                          track=track.track_id, error=str(exc))
+                log.error(
+                    "sighting_write_failed",
+                    camera=self.camera_id,
+                    track=track.track_id,
+                    error=str(exc),
+                )
 
             if written:
                 self.sightings_written += 1
@@ -294,15 +302,20 @@ class CameraWorker:
         self._loop_index = None
         if self.traffic is not None:
             self.traffic.discard()
-        log.info("state_reset_after_cut", camera=self.camera_id,
-                 tracks_flushed=len(cut_tracks), epoch=self._epoch)
+        log.info(
+            "state_reset_after_cut",
+            camera=self.camera_id,
+            tracks_flushed=len(cut_tracks),
+            epoch=self._epoch,
+        )
 
     async def _post_health(self, reachable: bool) -> None:
         stats = self.stream.stats() if self.stream else {}
         try:
             async with transaction() as conn:
                 await writer.write_health(
-                    conn, self.camera_id,
+                    conn,
+                    self.camera_id,
                     reachable=reachable,
                     last_frame_at=datetime.now(UTC) if reachable else None,
                     measured_fps=stats.get("measured_fps"),
@@ -352,15 +365,16 @@ class CameraWorker:
                 # Scheduled cut, from the measured loop period. Checked
                 # before detection so no frame is tracked across the join.
                 if self._crossed_loop_point(frame):
-                    log.info("scene_cut_scheduled", camera=self.camera_id,
-                             pts_s=round(frame.pts_s, 2),
-                             period_s=self.gating.loop_period_s)
+                    log.info(
+                        "scene_cut_scheduled",
+                        camera=self.camera_id,
+                        pts_s=round(frame.pts_s, 2),
+                        period_s=self.gating.loop_period_s,
+                    )
                     await self._on_discontinuity(frame)
                     continue
 
-                detections = await loop.run_in_executor(
-                    None, self.detector, frame.image
-                )
+                detections = await loop.run_in_executor(None, self.detector, frame.image)
                 self._detections_since_health += len(detections)
                 self._cache_frame(frame)
                 self._last_frame = frame
@@ -400,12 +414,14 @@ class CameraWorker:
                     try:
                         async with transaction() as conn:
                             await writer.archive_frame(
-                                conn, self.camera_id, frame.seen_at.replace(microsecond=0),
-                                frame.image, detections,
+                                conn,
+                                self.camera_id,
+                                frame.seen_at.replace(microsecond=0),
+                                frame.image,
+                                detections,
                             )
                     except Exception as exc:
-                        log.warning("frame_archive_failed",
-                                    camera=self.camera_id, error=str(exc))
+                        log.warning("frame_archive_failed", camera=self.camera_id, error=str(exc))
 
                 if time.monotonic() - self._last_health > HEALTH_INTERVAL_S:
                     await self._post_health(reachable=True)
@@ -421,8 +437,9 @@ class CameraWorker:
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            log.error("camera_worker_crashed", camera=self.camera_id,
-                      error=f"{type(exc).__name__}: {exc}")
+            log.error(
+                "camera_worker_crashed", camera=self.camera_id, error=f"{type(exc).__name__}: {exc}"
+            )
         finally:
             await self.shutdown()
 
@@ -444,8 +461,7 @@ class CameraWorker:
                         await writer.write_traffic(conn, summary)
                 except Exception as exc:
                     log.warning("final_bucket_failed", camera=self.camera_id, error=str(exc))
-        log.info("camera_worker_stopped", camera=self.camera_id,
-                 sightings=self.sightings_written)
+        log.info("camera_worker_stopped", camera=self.camera_id, sightings=self.sightings_written)
 
     def stop(self) -> None:
         self._stopping = True

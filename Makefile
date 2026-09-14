@@ -5,7 +5,7 @@ COMPOSE ?= docker compose
 UV_CMD  := $(if $(shell command -v $(UV) 2>/dev/null),$(UV),python3 -m uv)
 
 .DEFAULT_GOAL := help
-.PHONY: help install db-up db-down migrate seed test lint \
+.PHONY: help install db-up db-down migrate seed test lint format format-check \
         build up down logs ps registry ingest pipelines correlation api \
         sync survey preflight pipeline clean
 
@@ -22,6 +22,14 @@ test:  ## Run the test suite (DB-backed tests skip with no database)
 
 lint:  ## ruff
 	$(UV_CMD) run ruff check .
+
+format:  ## Format backend (ruff) and frontend (prettier) in place
+	$(UV_CMD) run ruff format .
+	cd frontend && npm run format
+
+format-check:  ## Fail if anything is unformatted; changes nothing
+	$(UV_CMD) run ruff format --check .
+	cd frontend && npm run format:check
 
 # -- video files in, annotated video out ------------------------------------
 pipeline:  ## One pass over video files. V="a.mp4 b.mp4", ARGS for the rest. See PIPELINE.md

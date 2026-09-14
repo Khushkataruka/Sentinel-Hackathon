@@ -38,7 +38,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],       # tightened per-deployment; the HLD covers this
+    allow_origins=["*"],  # tightened per-deployment; the HLD covers this
     allow_methods=["*"],
     allow_headers=["*"],
 )

@@ -62,9 +62,7 @@ class CorrelationWorker:
             return False
         return all(
             row[column] in TERMINAL
-            for column in (
-                "describe_status", "embed_status", "plate_status", "violation_status"
-            )
+            for column in ("describe_status", "embed_status", "plate_status", "violation_status")
         )
 
     async def _correlate(self, read_id: uuid.UUID) -> None:
@@ -75,11 +73,16 @@ class CorrelationWorker:
             raised = await watchlist.check_sighting(conn, read_id)
             await conn.execute(
                 "UPDATE sightings SET state = $2 WHERE read_id = $1",
-                read_id, SightingState.CORRELATED.value,
+                read_id,
+                SightingState.CORRELATED.value,
             )
             await outbox.post(conn, read_id, outbox.COMPLETE)
             await audit.service(
-                conn, "correlation", "sighting.correlate", "sighting", str(read_id),
+                conn,
+                "correlation",
+                "sighting.correlate",
+                "sighting",
+                str(read_id),
                 {"alerts": len(raised)},
             )
 
@@ -121,8 +124,9 @@ class CorrelationWorker:
 
         if rows:
             self.timed_out += len(rows)
-            log.warning("sightings_timed_out", count=len(rows),
-                        after_s=settings.correlation_timeout_s)
+            log.warning(
+                "sightings_timed_out", count=len(rows), after_s=settings.correlation_timeout_s
+            )
 
     # -- loop --------------------------------------------------------------
 
@@ -155,7 +159,8 @@ class CorrelationWorker:
         if waited > settings.correlation_timeout_s:
             log.warning(
                 "drain_gave_up_on_open_sightings",
-                open=open_rows, waited_s=round(waited, 1),
+                open=open_rows,
+                waited_s=round(waited, 1),
                 reason="the outbox is empty but these will never become ready",
             )
             return True
@@ -174,8 +179,11 @@ class CorrelationWorker:
                 if not events:
                     idle_since = idle_since or time.monotonic()
                     if self.drain and await self._quiet(idle_since):
-                        log.info("correlation_drained", correlated=self.correlated,
-                                 timed_out=self.timed_out)
+                        log.info(
+                            "correlation_drained",
+                            correlated=self.correlated,
+                            timed_out=self.timed_out,
+                        )
                         break
                     try:
                         await asyncio.wait_for(
@@ -188,16 +196,18 @@ class CorrelationWorker:
                 idle_since = None
                 for event in events:
                     if event["event"] == outbox.COMPLETE:
-                        continue    # our own output; do not loop on it
+                        continue  # our own output; do not loop on it
                     try:
                         await self._correlate(event["read_id"])
                     except Exception as exc:
-                        log.error("correlate_failed", read_id=str(event["read_id"]),
-                                  error=f"{type(exc).__name__}: {exc}")
+                        log.error(
+                            "correlate_failed",
+                            read_id=str(event["read_id"]),
+                            error=f"{type(exc).__name__}: {exc}",
+                        )
         finally:
             sweep_task.cancel()
-            log.info("correlation_stopped", correlated=self.correlated,
-                     timed_out=self.timed_out)
+            log.info("correlation_stopped", correlated=self.correlated, timed_out=self.timed_out)
 
     async def _sweep_loop(self) -> None:
         while not self._stopping.is_set():
@@ -218,5 +228,5 @@ class CorrelationWorker:
         for sig in (signal.SIGINT, signal.SIGTERM):
             try:
                 loop.add_signal_handler(sig, self.stop)
-            except NotImplementedError:      # pragma: no cover
+            except NotImplementedError:  # pragma: no cover
                 pass

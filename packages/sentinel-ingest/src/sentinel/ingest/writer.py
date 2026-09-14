@@ -152,11 +152,21 @@ async def write_sighting(
         ON CONFLICT (camera_id, track_id) DO NOTHING
         RETURNING read_id
         """,
-        read_id, camera_id, track_id, seen_at, track_start_at, track_end_at,
-        list(bbox), list(crop_bbox) if crop_bbox else None,
-        cls, crop_ref, detect_model_id,
-        statuses[Pipeline.DESCRIBE].value, statuses[Pipeline.EMBED].value,
-        statuses[Pipeline.PLATE].value, statuses[Pipeline.VIOLATE].value,
+        read_id,
+        camera_id,
+        track_id,
+        seen_at,
+        track_start_at,
+        track_end_at,
+        list(bbox),
+        list(crop_bbox) if crop_bbox else None,
+        cls,
+        crop_ref,
+        detect_model_id,
+        statuses[Pipeline.DESCRIBE].value,
+        statuses[Pipeline.EMBED].value,
+        statuses[Pipeline.PLATE].value,
+        statuses[Pipeline.VIOLATE].value,
     )
     if row is None:
         log.debug("sighting_duplicate", camera=camera_id, track=track_id)
@@ -174,8 +184,12 @@ async def write_sighting(
         elif pipeline is Pipeline.VIOLATE:
             payload["permitted_violations"] = gating.permitted_violations
         await queue.enqueue(
-            conn, pipeline=pipeline, read_id=read_id, camera_id=camera_id,
-            crop_ref=crop_ref, payload=payload,
+            conn,
+            pipeline=pipeline,
+            read_id=read_id,
+            camera_id=camera_id,
+            crop_ref=crop_ref,
+            payload=payload,
         )
 
     return read_id
@@ -204,7 +218,9 @@ async def archive_frame(
         INSERT INTO frames (camera_id, captured_at, path) VALUES ($1, $2, $3)
         ON CONFLICT (camera_id, captured_at) DO NOTHING
         """,
-        camera_id, when, media.relative(path),
+        camera_id,
+        when,
+        media.relative(path),
     )
     return result.endswith("1")
 
@@ -226,9 +242,14 @@ async def write_traffic(conn: asyncpg.Connection, summary: dict[str, Any]) -> No
             los = EXCLUDED.los,
             computed_at = now()
         """,
-        summary["camera_id"], summary["bucket_start"], summary["bucket_seconds"],
-        summary["frames_expected"], summary["frames_decoded"],
-        summary["mean_occupancy"], summary["peak_occupancy"], summary["mean_concurrent"],
+        summary["camera_id"],
+        summary["bucket_start"],
+        summary["bucket_seconds"],
+        summary["frames_expected"],
+        summary["frames_decoded"],
+        summary["mean_occupancy"],
+        summary["peak_occupancy"],
+        summary["mean_concurrent"],
         summary["density_vpkm"],
         summary["los"].value if summary["los"] else None,
     )
@@ -244,8 +265,12 @@ async def write_traffic(conn: asyncpg.Connection, summary: dict[str, Any]) -> No
                 mean_dwell_s = EXCLUDED.mean_dwell_s,
                 computed_at = now()
             """,
-            summary["camera_id"], summary["bucket_start"], summary["bucket_seconds"],
-            count["class"], count["vehicle_count"], count["mean_dwell_s"],
+            summary["camera_id"],
+            summary["bucket_start"],
+            summary["bucket_seconds"],
+            count["class"],
+            count["vehicle_count"],
+            count["mean_dwell_s"],
         )
 
 
@@ -280,6 +305,11 @@ async def write_health(
             (camera_id, reachable, last_frame_at, decode_fps, detections_1h, verdict, detail)
         VALUES ($1, $2, $3, $4, $5, $6, $7)
         """,
-        camera_id, reachable, last_frame_at, measured_fps, detections_1h, verdict,
+        camera_id,
+        reachable,
+        last_frame_at,
+        measured_fps,
+        detections_1h,
+        verdict,
         detail or {},
     )

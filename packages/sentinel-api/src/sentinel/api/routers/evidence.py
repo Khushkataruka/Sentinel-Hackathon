@@ -36,7 +36,7 @@ async def evidence(read_id: uuid.UUID, conn: DbConn, user: User):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no such sighting")
 
     row = dict(sighting)
-    row.pop("embedding", None)          # 2 KB of floats nobody is rendering
+    row.pop("embedding", None)  # 2 KB of floats nobody is rendering
     row.pop("caption_embedding", None)
 
     models = await conn.fetch(
@@ -46,31 +46,40 @@ async def evidence(read_id: uuid.UUID, conn: DbConn, user: User):
          WHERE id = ANY($1::smallint[])
         """,
         [
-            i for i in (
-                sighting["detect_model_id"], sighting["describe_model_id"],
+            i
+            for i in (
+                sighting["detect_model_id"],
+                sighting["describe_model_id"],
                 sighting["embed_model_id"],
-            ) if i is not None
+            )
+            if i is not None
         ],
     )
 
     return {
         "sighting": row,
         "riders": [
-            dict(r) for r in await conn.fetch(
+            dict(r)
+            for r in await conn.fetch(
                 "SELECT slot, bbox, helmet, helmet_conf FROM sighting_riders "
-                "WHERE read_id = $1 ORDER BY slot", read_id
+                "WHERE read_id = $1 ORDER BY slot",
+                read_id,
             )
         ],
         "plate_hypotheses": [
-            dict(r) for r in await conn.fetch(
+            dict(r)
+            for r in await conn.fetch(
                 "SELECT rank, plate, confidence FROM plate_hypotheses "
-                "WHERE read_id = $1 ORDER BY rank", read_id
+                "WHERE read_id = $1 ORDER BY rank",
+                read_id,
             )
         ],
         "violations": [
-            dict(r) for r in await conn.fetch(
+            dict(r)
+            for r in await conn.fetch(
                 "SELECT id, violation_type, rider_slot, confidence, review_status, "
-                "evidence_ref FROM violations WHERE read_id = $1", read_id
+                "evidence_ref FROM violations WHERE read_id = $1",
+                read_id,
             )
         ],
         "models": [dict(r) for r in models],
@@ -151,6 +160,9 @@ async def audit_trail(
            AND ($3::timestamptz IS NULL OR occurred_at >= $3)
          ORDER BY occurred_at DESC LIMIT $4
         """,
-        object_type, object_id, since, limit,
+        object_type,
+        object_id,
+        since,
+        limit,
     )
     return [dict(r) for r in rows]

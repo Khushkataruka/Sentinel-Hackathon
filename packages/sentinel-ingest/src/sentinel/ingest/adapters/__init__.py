@@ -8,5 +8,10 @@ from sentinel.ingest.adapters.base import (
 )
 
 __all__ = [
-    "Adapter", "AdapterError", "BaseAdapter", "CameraRef", "HealthReport", "StreamHandle",
+    "Adapter",
+    "AdapterError",
+    "BaseAdapter",
+    "CameraRef",
+    "HealthReport",
+    "StreamHandle",
 ]

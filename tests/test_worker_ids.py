@@ -16,10 +16,18 @@ from sentinel.ingest.writer import Gating
 
 def gating(loop_period_s=None):
     return Gating(
-        camera_id="CAM-1", permitted_attributes=[], permitted_violations=[],
-        plate_viable=False, density_viable=False, decode_fps=10.0,
-        deinterlace=False, distortion=None, trust_level=0.8,
-        lane_count=None, lane_polygon_wkt=None, loop_period_s=loop_period_s,
+        camera_id="CAM-1",
+        permitted_attributes=[],
+        permitted_violations=[],
+        plate_viable=False,
+        density_viable=False,
+        decode_fps=10.0,
+        deinterlace=False,
+        distortion=None,
+        trust_level=0.8,
+        lane_count=None,
+        lane_polygon_wkt=None,
+        loop_period_s=loop_period_s,
     )
 
 
@@ -55,15 +63,14 @@ def test_two_workers_on_one_camera_do_not_collide():
 def test_no_scheduled_cut_without_a_measured_period():
     """Unknown means do nothing, not guess."""
     w = worker(loop_period_s=None)
-    assert not any(
-        w._crossed_loop_point(SimpleNamespace(pts_s=p)) for p in (0, 10, 20, 40, 100)
-    )
+    assert not any(w._crossed_loop_point(SimpleNamespace(pts_s=p)) for p in (0, 10, 20, 40, 100))
 
 
 def test_scheduled_cut_fires_once_per_loop():
     w = worker(loop_period_s=20.0)
     fired = [
-        p for p in (0.0, 5.0, 19.9, 20.1, 25.0, 39.9, 40.1, 45.0, 60.5)
+        p
+        for p in (0.0, 5.0, 19.9, 20.1, 25.0, 39.9, 40.1, 45.0, 60.5)
         if w._crossed_loop_point(SimpleNamespace(pts_s=p))
     ]
     assert fired == [20.1, 40.1, 60.5]

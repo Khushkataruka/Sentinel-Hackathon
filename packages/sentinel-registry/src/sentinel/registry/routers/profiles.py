@@ -45,8 +45,12 @@ async def put_profile(camera_id: str, body: CameraProfileIn, conn: DbTxn, user: 
     before = await repo.get_profile(conn, camera_id)
     profile = await repo.upsert_profile(conn, camera_id, body)
     await audit.write(
-        conn, actor_kind=ActorKind.USER, actor_id=user.id, action="camera_profile.upsert",
-        object_type="camera", object_id=camera_id,
+        conn,
+        actor_kind=ActorKind.USER,
+        actor_id=user.id,
+        action="camera_profile.upsert",
+        object_type="camera",
+        object_id=camera_id,
         details={
             "permitted_violations_before": before.permitted_violations if before else None,
             "permitted_violations_after": profile.permitted_violations,

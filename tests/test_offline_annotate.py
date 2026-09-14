@@ -49,8 +49,14 @@ def test_sidecar_round_trips(tmp_path: Path):
     path.write_text(
         json.dumps({"header": {"camera_id": "VID-clip", "start_at": "2026-09-07T09:00:00+00:00"}})
         + "\n"
-        + json.dumps({"pts": 0.1, "i": 1, "at": "x", "boxes": [
-            {"t": "run:0:1", "b": [10, 20, 40, 60], "c": "car", "s": 0.9}]})
+        + json.dumps(
+            {
+                "pts": 0.1,
+                "i": 1,
+                "at": "x",
+                "boxes": [{"t": "run:0:1", "b": [10, 20, 40, 60], "c": "car", "s": 0.9}],
+            }
+        )
         + "\n"
         + json.dumps({"header": {"target_fps": 12.5}})
         + "\n",
@@ -87,12 +93,19 @@ def test_draw_frame_clips_to_the_frame():
 
 
 def test_match_tags_attach_by_read_id():
-    labels = {"run:0:1": Label(track_id="run:0:1", read_id="abc"),
-              "run:0:2": Label(track_id="run:0:2", read_id="def")}
+    labels = {
+        "run:0:1": Label(track_id="run:0:1", read_id="abc"),
+        "run:0:2": Label(track_id="run:0:2", read_id="def"),
+    }
 
-    apply_matches(labels, {"matches": [
-        {"match_id": "MATCH-1", "sightings": [{"read_id": "abc"}, {"read_id": "zzz"}]}
-    ]})
+    apply_matches(
+        labels,
+        {
+            "matches": [
+                {"match_id": "MATCH-1", "sightings": [{"read_id": "abc"}, {"read_id": "zzz"}]}
+            ]
+        },
+    )
 
     assert labels["run:0:1"].match == "MATCH-1"
     assert labels["run:0:2"].match is None
@@ -102,8 +115,9 @@ def test_hud_does_not_overflow_a_short_frame():
     """The HUD is anchored to the bottom edge; a tiny frame must not index
     negatively into the array or raise."""
     image = np.zeros((48, 160, 3), dtype=np.uint8)
-    draw_hud(image, camera_id="VID-x", when="09:00:00", index=1, total=1,
-             stub_note="STUB MODELS: detect")
+    draw_hud(
+        image, camera_id="VID-x", when="09:00:00", index=1, total=1, stub_note="STUB MODELS: detect"
+    )
     assert image.any()
 
 
@@ -119,8 +133,9 @@ def test_default_spacing_is_a_plausible_speed():
     """Synthetic cameras must be far enough apart in space and time that a
     route between them survives the plausibility check in correlation.routes.
     2 km in 180 s is 40 km/h; the window is [2, 140]."""
-    specs = resolve([Path("/tmp/a.mp4"), Path("/tmp/b.mp4")],
-                    epoch=datetime(2026, 9, 7, 9, 0, tzinfo=UTC))
+    specs = resolve(
+        [Path("/tmp/a.mp4"), Path("/tmp/b.mp4")], epoch=datetime(2026, 9, 7, 9, 0, tzinfo=UTC)
+    )
 
     gap_s = (specs[1].start_at - specs[0].start_at).total_seconds()
     km = (specs[1].lat - specs[0].lat) * 111.32
@@ -160,12 +175,19 @@ def test_description_is_drawn_in_full():
     """Attributes, caption and plate are four different claims and all of them
     belong on the video -- the attributes are what search filters on, and the
     caption is the only place a roof carrier ever appears."""
-    lines = describe_lines({
-        "colour": "white", "vtype": "hatchback", "class": "car",
-        "make": "Maruti", "model": "Swift",
-        "caption": "a white hatchback with a roof carrier",
-        "features": [], "plate_text": "GJ01AB1234", "plate_conf": 0.71,
-    })
+    lines = describe_lines(
+        {
+            "colour": "white",
+            "vtype": "hatchback",
+            "class": "car",
+            "make": "Maruti",
+            "model": "Swift",
+            "caption": "a white hatchback with a roof carrier",
+            "features": [],
+            "plate_text": "GJ01AB1234",
+            "plate_conf": 0.71,
+        }
+    )
 
     assert lines[0] == "white hatchback · Maruti Swift"
     assert "roof carrier" in lines[1]
@@ -195,10 +217,13 @@ def test_a_sighting_with_no_description_still_names_its_class():
 
 
 def test_features_the_caption_already_covers_are_not_repeated():
-    lines = describe_lines({
-        "class": "car", "caption": "a white car with a roof carrier",
-        "features": ["roof carrier", "towbar"],
-    })
+    lines = describe_lines(
+        {
+            "class": "car",
+            "caption": "a white car with a roof carrier",
+            "features": ["roof carrier", "towbar"],
+        }
+    )
 
     assert not any(line.startswith("+ roof carrier") for line in lines)
     assert any("towbar" in line for line in lines)
@@ -237,7 +262,9 @@ def test_the_caption_is_sacrificed_before_the_violation():
     label = Label(
         track_id="t1",
         lines=["silver sedan", "a silver sedan with a carrier", "+ towbar", "GJ01AB1234"],
-        match="MATCH-2", violations=["no_helmet"], pending=["plate"],
+        match="MATCH-2",
+        violations=["no_helmet"],
+        pending=["plate"],
     )
 
     texts = [text for text, _ in label_lines({"c": "car"}, label, (1, 1, 1))]
@@ -252,10 +279,13 @@ def test_a_crowded_frame_still_draws_every_box():
     """Dense traffic is the normal case. Labels may be trimmed or dropped,
     but a vehicle never loses its box because its neighbour got there first."""
     image = np.zeros((300, 400, 3), dtype=np.uint8)
-    full = ["silver sedan · toyota glanza", "a silver sedan with a roof carrier",
-            "+ towbar", "GJ01AB1234  0.71"]
-    boxes = [{"t": f"t{i}", "b": [40, 150 + i * 4, 200, 170 + i * 4], "c": "car"}
-             for i in range(6)]
+    full = [
+        "silver sedan · toyota glanza",
+        "a silver sedan with a roof carrier",
+        "+ towbar",
+        "GJ01AB1234  0.71",
+    ]
+    boxes = [{"t": f"t{i}", "b": [40, 150 + i * 4, 200, 170 + i * 4], "c": "car"} for i in range(6)]
     labels = {f"t{i}": Label(track_id=f"t{i}", lines=list(full)) for i in range(6)}
 
     assert draw_frame(image, boxes, labels) == 6
@@ -274,11 +304,17 @@ def test_a_label_that_does_not_fit_above_is_drawn_below():
     of the frame -- exactly where a six-line description would be drawn off
     the image. OpenCV clips that in silence."""
     image = np.zeros((200, 240, 3), dtype=np.uint8)
-    labels = {"t1": Label(
-        track_id="t1",
-        lines=["white hatchback · Maruti Swift", "a white hatchback with a carrier",
-               "+ towbar", "GJ01AB1234  0.71"],
-    )}
+    labels = {
+        "t1": Label(
+            track_id="t1",
+            lines=[
+                "white hatchback · Maruti Swift",
+                "a white hatchback with a carrier",
+                "+ towbar",
+                "GJ01AB1234  0.71",
+            ],
+        )
+    }
 
     # Box hard against the top edge: nothing fits above it.
     draw_frame(image, [{"t": "t1", "b": [20, 2, 90, 40], "c": "car"}], labels)
@@ -290,19 +326,28 @@ def test_a_caption_that_only_restates_the_attributes_is_dropped():
     """The stub captioner writes the attribute fields back out as a sentence.
     Drawn as well as the attributes it is the same words twice, on a label
     that is already competing for room."""
-    lines = describe_lines({
-        "colour": "silver", "vtype": "suv", "make": "maruti", "model": "wagonr",
-        "caption": "[stub] silver maruti wagonr suv",
-    })
+    lines = describe_lines(
+        {
+            "colour": "silver",
+            "vtype": "suv",
+            "make": "maruti",
+            "model": "wagonr",
+            "caption": "[stub] silver maruti wagonr suv",
+        }
+    )
 
     assert lines == ["silver suv · maruti wagonr"]
 
 
 def test_a_caption_that_says_something_new_is_kept():
     """The whole reason free text exists: a roof rack is in no column."""
-    lines = describe_lines({
-        "colour": "silver", "vtype": "bus", "caption": "[stub] silver bus with roof rack",
-    })
+    lines = describe_lines(
+        {
+            "colour": "silver",
+            "vtype": "bus",
+            "caption": "[stub] silver bus with roof rack",
+        }
+    )
 
     assert len(lines) == 2
     assert "roof rack" in lines[1]

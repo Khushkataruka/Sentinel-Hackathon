@@ -76,7 +76,7 @@ def test_reanchors_after_a_cut():
     clock.observe(2.0)
 
     before = datetime.now(UTC)
-    when, dt, cut = clock.observe(600.0)     # a large forward jump: the cut
+    when, dt, cut = clock.observe(600.0)  # a large forward jump: the cut
     after = datetime.now(UTC)
 
     assert cut is True
@@ -125,7 +125,7 @@ def test_fixed_epoch_survives_a_loop_cut():
 
     clock.observe(0.0)
     clock.observe(19.9)
-    after_cut, _, cut = clock.observe(0.1)      # backwards: the loop point
+    after_cut, _, cut = clock.observe(0.1)  # backwards: the loop point
 
     assert cut is True
     assert (after_cut - epoch).total_seconds() == 0.1

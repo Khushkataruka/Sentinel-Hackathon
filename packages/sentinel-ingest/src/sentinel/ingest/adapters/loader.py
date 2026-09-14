@@ -113,19 +113,29 @@ def load_one(folder: Path) -> LoadedAdapter:
 
         log.info("adapter_registered", adapter=name, driver=driver, cameras=count)
         return LoadedAdapter(
-            name=name, driver=driver, config=config, status=AdapterStatus.REGISTERED,
-            adapter=adapter, camera_count=count,
+            name=name,
+            driver=driver,
+            config=config,
+            status=AdapterStatus.REGISTERED,
+            adapter=adapter,
+            camera_count=count,
         )
 
     except Exception as exc:
         detail = f"{type(exc).__name__}: {exc}"
         log.error(
-            "adapter_failed", adapter=name, driver=driver, error=detail,
+            "adapter_failed",
+            adapter=name,
+            driver=driver,
+            error=detail,
             trace=traceback.format_exc(limit=4),
         )
         return LoadedAdapter(
-            name=name, driver=driver, config=config,
-            status=AdapterStatus.FAILED, last_error=detail,
+            name=name,
+            driver=driver,
+            config=config,
+            status=AdapterStatus.FAILED,
+            last_error=detail,
         )
 
 
@@ -159,8 +169,11 @@ async def sync_to_registry(loaded: list[LoadedAdapter]) -> None:
     async with transaction() as conn:
         for item in loaded:
             row = AdapterRow(
-                name=item.name, driver=item.driver, config=item.config,
-                status=item.status, last_error=item.last_error,
+                name=item.name,
+                driver=item.driver,
+                config=item.config,
+                status=item.status,
+                last_error=item.last_error,
             )
             await conn.execute(
                 """
@@ -171,5 +184,9 @@ async def sync_to_registry(loaded: list[LoadedAdapter]) -> None:
                     status = EXCLUDED.status, last_error = EXCLUDED.last_error,
                     tested_at = now()
                 """,
-                row.name, row.driver, row.config, row.status.value, row.last_error,
+                row.name,
+                row.driver,
+                row.config,
+                row.status.value,
+                row.last_error,
             )

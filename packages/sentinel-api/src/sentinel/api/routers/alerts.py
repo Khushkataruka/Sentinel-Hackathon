@@ -46,7 +46,9 @@ async def inbox(
            a.created_at DESC
          LIMIT $3
         """,
-        alert_status.value, tier.value if tier else None, limit,
+        alert_status.value,
+        tier.value if tier else None,
+        limit,
     )
     return [dict(r) for r in rows]
 
@@ -72,22 +74,26 @@ async def decide(alert_id: uuid.UUID, body: Decision, conn: DbTxn, user: User):
         UPDATE alerts SET status = $2, decided_by = $3, decided_at = now()
          WHERE id = $1 AND status = 'new' RETURNING id
         """,
-        alert_id, body.status.value, uuid.UUID(user.id),
+        alert_id,
+        body.status.value,
+        uuid.UUID(user.id),
     )
     if updated is None:
         raise HTTPException(status.HTTP_409_CONFLICT, "already decided, or no such alert")
 
     await audit.write(
-        conn, actor_kind=ActorKind.USER, actor_id=user.id,
-        action=f"alert.{body.status.value}", object_type="alert",
-        object_id=str(alert_id), details={"note": body.note} if body.note else {},
+        conn,
+        actor_kind=ActorKind.USER,
+        actor_id=user.id,
+        action=f"alert.{body.status.value}",
+        object_type="alert",
+        object_id=str(alert_id),
+        details={"note": body.note} if body.note else {},
     )
     return {"id": str(alert_id), "status": body.status.value}
 
 
 @router.get("/counts")
 async def counts(conn: DbConn, user: User):
-    rows = await conn.fetch(
-        "SELECT tier, status, count(*) AS n FROM alerts GROUP BY tier, status"
-    )
+    rows = await conn.fetch("SELECT tier, status, count(*) AS n FROM alerts GROUP BY tier, status")
     return [dict(r) for r in rows]

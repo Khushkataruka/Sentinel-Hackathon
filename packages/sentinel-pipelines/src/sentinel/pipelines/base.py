@@ -51,9 +51,7 @@ class PipelineWorker(abc.ABC):
     # -- to implement ------------------------------------------------------
 
     @abc.abstractmethod
-    async def process(
-        self, conn, job: queue.Job, crop: np.ndarray
-    ) -> dict[str, Any] | None:
+    async def process(self, conn, job: queue.Job, crop: np.ndarray) -> dict[str, Any] | None:
         """Do the work and write this pipeline's columns.
 
         Called inside the job's transaction. Return a dict for the log, or
@@ -75,13 +73,15 @@ class PipelineWorker(abc.ABC):
             return
         async with acquire() as conn:
             self.model_id = await conn.fetchval(
-                "SELECT id FROM model_versions WHERE role = $1 "
-                "ORDER BY registered_at DESC LIMIT 1",
+                "SELECT id FROM model_versions WHERE role = $1 ORDER BY registered_at DESC LIMIT 1",
                 self.model_role,
             )
         if self.model_id is None:
-            log.warning("no_model_version", role=self.model_role,
-                        hint="register one so claims are traceable to weights")
+            log.warning(
+                "no_model_version",
+                role=self.model_role,
+                hint="register one so claims are traceable to weights",
+            )
 
     def _load_crop(self, crop_ref: str) -> np.ndarray | None:
         import cv2
@@ -96,7 +96,8 @@ class PipelineWorker(abc.ABC):
         column = STATUS_COLUMN[self.pipeline]
         await conn.execute(
             f"UPDATE sightings SET {column} = $2 WHERE read_id = $1",  # noqa: S608
-            read_id, status.value,
+            read_id,
+            status.value,
         )
 
     async def _handle(self, job: queue.Job) -> None:
@@ -110,8 +111,12 @@ class PipelineWorker(abc.ABC):
                 await self._set_status(conn, job.read_id, PipelineStatus.SKIPPED)
                 await outbox.post(conn, job.read_id, DONE_EVENT[self.pipeline])
                 await queue.ack(conn, job.id)
-            log.warning("crop_missing", pipeline=self.pipeline.value,
-                        read_id=str(job.read_id), crop_ref=job.crop_ref)
+            log.warning(
+                "crop_missing",
+                pipeline=self.pipeline.value,
+                read_id=str(job.read_id),
+                crop_ref=job.crop_ref,
+            )
             return
 
         try:
@@ -122,8 +127,9 @@ class PipelineWorker(abc.ABC):
                 await queue.ack(conn, job.id)
             self.processed += 1
             if detail:
-                log.debug("job_done", pipeline=self.pipeline.value,
-                          read_id=str(job.read_id), **detail)
+                log.debug(
+                    "job_done", pipeline=self.pipeline.value, read_id=str(job.read_id), **detail
+                )
 
         except Exception as exc:
             self.failed += 1
@@ -136,14 +142,23 @@ class PipelineWorker(abc.ABC):
                     # failure has to unblock it, not hang it.
                     await self._set_status(conn, job.read_id, PipelineStatus.FAILED)
                     await outbox.post(conn, job.read_id, DONE_EVENT[self.pipeline])
-            log.error("job_failed", pipeline=self.pipeline.value,
-                      read_id=str(job.read_id), attempts=job.attempts, error=message)
+            log.error(
+                "job_failed",
+                pipeline=self.pipeline.value,
+                read_id=str(job.read_id),
+                attempts=job.attempts,
+                error=message,
+            )
 
     async def run(self) -> None:
         await self._resolve_model_id()
         await self.setup()
-        log.info("pipeline_started", pipeline=self.pipeline.value,
-                 concurrency=self.concurrency, model_id=self.model_id)
+        log.info(
+            "pipeline_started",
+            pipeline=self.pipeline.value,
+            concurrency=self.concurrency,
+            model_id=self.model_id,
+        )
 
         semaphore = asyncio.Semaphore(self.concurrency)
 
@@ -161,8 +176,12 @@ class PipelineWorker(abc.ABC):
 
             if not jobs:
                 if self.drain:
-                    log.info("pipeline_drained", pipeline=self.pipeline.value,
-                             processed=self.processed, failed=self.failed)
+                    log.info(
+                        "pipeline_drained",
+                        pipeline=self.pipeline.value,
+                        processed=self.processed,
+                        failed=self.failed,
+                    )
                     break
                 try:
                     await asyncio.wait_for(
@@ -174,8 +193,12 @@ class PipelineWorker(abc.ABC):
 
             await asyncio.gather(*(guarded(job) for job in jobs))
 
-        log.info("pipeline_stopped", pipeline=self.pipeline.value,
-                 processed=self.processed, failed=self.failed)
+        log.info(
+            "pipeline_stopped",
+            pipeline=self.pipeline.value,
+            processed=self.processed,
+            failed=self.failed,
+        )
 
     def stop(self) -> None:
         self._stopping.set()
@@ -185,5 +208,5 @@ class PipelineWorker(abc.ABC):
         for sig in (signal.SIGINT, signal.SIGTERM):
             try:
                 loop.add_signal_handler(sig, self.stop)
-            except NotImplementedError:      # pragma: no cover
+            except NotImplementedError:  # pragma: no cover
                 pass

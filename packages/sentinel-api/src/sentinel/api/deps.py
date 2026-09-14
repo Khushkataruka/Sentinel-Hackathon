@@ -41,8 +41,10 @@ async def current_user(
     )
     if row is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, f"unknown user {x_sentinel_user!r}")
-    return CurrentUser(id=str(row["id"]), **{k: row[k] for k in
-                       ("username", "display_name", "department_id", "role")})
+    return CurrentUser(
+        id=str(row["id"]),
+        **{k: row[k] for k in ("username", "display_name", "department_id", "role")},
+    )
 
 
 async def visible_departments(conn: asyncpg.Connection, user_id: str) -> list[int]:

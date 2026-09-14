@@ -86,9 +86,7 @@ class OnnxReID:
     def __init__(self, model_path: Path, dim: int | None = None) -> None:
         import onnxruntime as ort
 
-        self.session = ort.InferenceSession(
-            str(model_path), providers=settings.onnx_providers
-        )
+        self.session = ort.InferenceSession(str(model_path), providers=settings.onnx_providers)
         self.input_name = self.session.get_inputs()[0].name
         shape = self.session.get_inputs()[0].shape
         self.height = int(shape[2]) if isinstance(shape[2], int) else 256

@@ -125,7 +125,7 @@ async def import_rows(
     result = ImportResult()
     dept_cache: dict[str, int] = {}
 
-    for index, raw in enumerate(rows, start=2):   # row 1 is the header
+    for index, raw in enumerate(rows, start=2):  # row 1 is the header
         camera_id = str(raw.get("camera_id", "")).strip() or None
         try:
             missing = REQUIRED - raw.keys()

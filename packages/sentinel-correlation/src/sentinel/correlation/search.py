@@ -71,13 +71,18 @@ async def create_search(
         INSERT INTO searches (kind, params, watchlist_entry_id, requested_by)
         VALUES ($1,$2,$3,$4) RETURNING id
         """,
-        kind.value, params, watchlist_entry_id, requested_by,
+        kind.value,
+        params,
+        watchlist_entry_id,
+        requested_by,
     )
     await audit.write(
         conn,
         actor_kind=ActorKind.USER if requested_by else ActorKind.SERVICE,
         actor_id=str(requested_by) if requested_by else "correlation",
-        action="search.create", object_type="search", object_id=str(search_id),
+        action="search.create",
+        object_type="search",
+        object_id=str(search_id),
         details={"kind": kind.value, "params": params},
     )
     return search_id
@@ -98,8 +103,11 @@ async def run(
     """Find candidates, build routes, score, persist."""
     params = description.model_dump(exclude={"embedding"}, exclude_none=True)
     search_id = await create_search(
-        conn, kind, params,
-        requested_by=requested_by, watchlist_entry_id=watchlist_entry_id,
+        conn,
+        kind,
+        params,
+        requested_by=requested_by,
+        watchlist_entry_id=watchlist_entry_id,
     )
 
     # Step 2. The count that makes the rest mean something.
@@ -123,15 +131,17 @@ async def run(
         restrict = [c.read_id for c in attribute_hits] or None
         groups.append(
             await cand.by_embedding(
-                conn, description.embedding, restrict_to=restrict,
-                since=since, until=until,
+                conn,
+                description.embedding,
+                restrict_to=restrict,
+                since=since,
+                until=until,
             )
         )
 
     if description.caption_query:
         groups.append(
-            await cand.by_caption(conn, None, description.caption_query,
-                                  since=since, until=until)
+            await cand.by_caption(conn, None, description.caption_query, since=since, until=until)
         )
 
     merged = cand.merge(*groups)[: settings.candidate_limit]
@@ -144,8 +154,11 @@ async def run(
     await conn.execute("UPDATE searches SET status = 'done' WHERE id = $1", search_id)
 
     result = SearchResult(
-        search_id=search_id, description=description, rarity_count=rarity_count,
-        candidates=merged, rejected_legs=len(rejected),
+        search_id=search_id,
+        description=description,
+        rarity_count=rarity_count,
+        candidates=merged,
+        rejected_legs=len(rejected),
         routes=[
             {
                 "route_id": str(route_id),
@@ -168,8 +181,12 @@ async def run(
     )
 
     log.info(
-        "search_complete", search_id=str(search_id), candidates=len(merged),
-        routes=len(scored), rarity=rarity_count, rejected_legs=len(rejected),
+        "search_complete",
+        search_id=str(search_id),
+        candidates=len(merged),
+        routes=len(scored),
+        rarity=rarity_count,
+        rejected_legs=len(rejected),
     )
     return result
 
@@ -194,7 +211,11 @@ async def by_registration(
         description.registration_no = registration_no
 
     return await run(
-        conn, description, kind=SearchKind.REGISTRATION,
-        since=since, until=until, requested_by=requested_by,
+        conn,
+        description,
+        kind=SearchKind.REGISTRATION,
+        since=since,
+        until=until,
+        requested_by=requested_by,
         district=description.district,
     )

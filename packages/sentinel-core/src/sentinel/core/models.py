@@ -83,10 +83,8 @@ class CameraProfileIn(Base):
     """
 
     resolution_class: ResolutionClass = ResolutionClass.THUMBNAIL
-    permitted_attributes: list[str] = Field(
-        default_factory=lambda: list(ALL_ATTRIBUTES))
-    permitted_violations: list[str] = Field(
-        default_factory=lambda: list(ALL_VIOLATIONS))
+    permitted_attributes: list[str] = Field(default_factory=lambda: list(ALL_ATTRIBUTES))
+    permitted_violations: list[str] = Field(default_factory=lambda: list(ALL_VIOLATIONS))
     plate_viable: bool = PLATE_VIABLE_BY_DEFAULT
     density_viable: bool = DENSITY_VIABLE_BY_DEFAULT
     lane_polygon_wkt: str | None = None
@@ -191,7 +189,7 @@ class Rider(Base):
 
     slot: int = Field(..., ge=1)
     bbox: list[int]
-    helmet: bool | None = None       # None = not assessable on this camera
+    helmet: bool | None = None  # None = not assessable on this camera
     helmet_conf: float | None = None
     detector_id: int | None = None
 
@@ -267,8 +265,8 @@ class VehicleDescription(Base):
     make: str | None = None
     model: str | None = None
     district: str | None = None
-    caption_query: str | None = None       # free-text, when the operator typed one
-    embedding: list[float] | None = None   # reference appearance, when there is one
+    caption_query: str | None = None  # free-text, when the operator typed one
+    embedding: list[float] | None = None  # reference appearance, when there is one
 
 
 class Candidate(Base):
@@ -276,7 +274,7 @@ class Candidate(Base):
     camera_id: str
     seen_at: datetime
     score: float
-    matched_on: list[str] = Field(default_factory=list)   # attribute|vector|caption|plate
+    matched_on: list[str] = Field(default_factory=list)  # attribute|vector|caption|plate
     plate_text: str | None = None
     trust_level: float = 1.0
 

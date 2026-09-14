@@ -67,7 +67,7 @@ async def list_cameras(
     *,
     department_id: int | None = None,
     enabled: bool | None = None,
-    near: tuple[float, float, float] | None = None,   # lat, lon, radius_m
+    near: tuple[float, float, float] | None = None,  # lat, lon, radius_m
     limit: int = 500,
     offset: int = 0,
 ) -> list[Camera]:
@@ -82,13 +82,13 @@ async def list_cameras(
         lat, lon, radius = near
         args.extend([lon, lat, radius])
         where.append(
-            f"ST_DWithin(c.location, ST_MakePoint(${len(args)-2}, ${len(args)-1})::geography,"
+            f"ST_DWithin(c.location, ST_MakePoint(${len(args) - 2}, ${len(args) - 1})::geography,"
             f" ${len(args)})"
         )
     args.extend([limit, offset])
     rows = await conn.fetch(
         f"SELECT {CAMERA_COLUMNS} FROM cameras c WHERE {' AND '.join(where)} "
-        f"ORDER BY c.camera_id LIMIT ${len(args)-1} OFFSET ${len(args)}",
+        f"ORDER BY c.camera_id LIMIT ${len(args) - 1} OFFSET ${len(args)}",
         *args,
     )
     return [Camera(**dict(r)) for r in rows]
@@ -129,11 +129,23 @@ async def upsert_camera(conn: asyncpg.Connection, cam: CameraIn) -> Camera:
             retention_days= EXCLUDED.retention_days,
             contract_expiry = EXCLUDED.contract_expiry,
             enabled       = EXCLUDED.enabled
-        RETURNING {CAMERA_COLUMNS.replace('c.', '')}
+        RETURNING {CAMERA_COLUMNS.replace("c.", "")}
         """,
-        cam.camera_id, cam.department_id, cam.name, cam.kind.value, cam.vendor,
-        cam.protocol, cam.adapter_id, cam.lon, cam.lat, cam.bearing_deg, cam.range_m,
-        cam.storage_kind, cam.retention_days, cam.contract_expiry, cam.enabled,
+        cam.camera_id,
+        cam.department_id,
+        cam.name,
+        cam.kind.value,
+        cam.vendor,
+        cam.protocol,
+        cam.adapter_id,
+        cam.lon,
+        cam.lat,
+        cam.bearing_deg,
+        cam.range_m,
+        cam.storage_kind,
+        cam.retention_days,
+        cam.contract_expiry,
+        cam.enabled,
     )
     return Camera(**dict(row))
 
@@ -200,11 +212,20 @@ async def upsert_profile(
             measured_at          = now()
         RETURNING {PROFILE_COLUMNS}
         """,
-        camera_id, profile.resolution_class.value, profile.permitted_attributes,
-        profile.permitted_violations, profile.plate_viable, profile.density_viable,
-        profile.lane_polygon_wkt, profile.lane_count, profile.decode_fps,
-        profile.deinterlace, profile.distortion, profile.trust_level,
-        profile.corridor_group, profile.loop_period_s,
+        camera_id,
+        profile.resolution_class.value,
+        profile.permitted_attributes,
+        profile.permitted_violations,
+        profile.plate_viable,
+        profile.density_viable,
+        profile.lane_polygon_wkt,
+        profile.lane_count,
+        profile.decode_fps,
+        profile.deinterlace,
+        profile.distortion,
+        profile.trust_level,
+        profile.corridor_group,
+        profile.loop_period_s,
     )
     return CameraProfile(**dict(row))
 
@@ -244,8 +265,11 @@ async def upsert_adapter(conn: asyncpg.Connection, adapter: Adapter) -> Adapter:
             tested_at = now()
         RETURNING *
         """,
-        adapter.name, adapter.driver, adapter.config,
-        adapter.status.value, adapter.last_error,
+        adapter.name,
+        adapter.driver,
+        adapter.config,
+        adapter.status.value,
+        adapter.last_error,
     )
     return Adapter(**dict(row))
 
@@ -265,8 +289,13 @@ async def record_health(conn: asyncpg.Connection, check: HealthCheck) -> None:
             (camera_id, reachable, last_frame_at, decode_fps, detections_1h, verdict, detail)
         VALUES ($1, $2, $3, $4, $5, $6, $7)
         """,
-        check.camera_id, check.reachable, check.last_frame_at, check.decode_fps,
-        check.detections_1h, check.verdict, check.detail,
+        check.camera_id,
+        check.reachable,
+        check.last_frame_at,
+        check.decode_fps,
+        check.detections_1h,
+        check.verdict,
+        check.detail,
     )
 
 
@@ -291,7 +320,9 @@ async def health_history(
          WHERE camera_id = $1 AND ($2::timestamptz IS NULL OR checked_at >= $2)
          ORDER BY checked_at DESC LIMIT $3
         """,
-        camera_id, since, limit,
+        camera_id,
+        since,
+        limit,
     )
     return [dict(r) for r in rows]
 
@@ -329,7 +360,11 @@ async def create_grant(
         INSERT INTO access_grants (user_id, department_id, granted_by, reason, expires_at)
         VALUES ($1, $2, $3, $4, $5) RETURNING id
         """,
-        user_id, department_id, granted_by, reason, expires_at,
+        user_id,
+        department_id,
+        granted_by,
+        reason,
+        expires_at,
     )
 
 

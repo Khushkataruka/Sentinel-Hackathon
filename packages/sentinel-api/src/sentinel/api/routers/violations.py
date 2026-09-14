@@ -51,7 +51,10 @@ async def queue(
          ORDER BY v.seen_at DESC
          LIMIT $4
         """,
-        review_status.value, violation_type, camera_id, limit,
+        review_status.value,
+        violation_type,
+        camera_id,
+        limit,
     )
     return [dict(r) for r in rows]
 
@@ -90,9 +93,7 @@ async def review(violation_id: int, body: ReviewIn, conn: DbTxn, user: User):
     A confirmed violation is a record, not a penalty.
     """
     if body.review_status not in (ReviewStatus.CONFIRMED, ReviewStatus.REJECTED):
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, "review sets confirmed or rejected only"
-        )
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "review sets confirmed or rejected only")
 
     updated = await conn.fetchval(
         """
@@ -101,14 +102,20 @@ async def review(violation_id: int, body: ReviewIn, conn: DbTxn, user: User):
          WHERE id = $1 AND review_status = 'pending_review'
         RETURNING id
         """,
-        violation_id, body.review_status.value, uuid.UUID(user.id),
+        violation_id,
+        body.review_status.value,
+        uuid.UUID(user.id),
     )
     if updated is None:
         raise HTTPException(status.HTTP_409_CONFLICT, "already reviewed, or no such row")
 
     await audit.write(
-        conn, actor_kind=ActorKind.USER, actor_id=user.id,
-        action=f"violation.{body.review_status.value}", object_type="violation",
-        object_id=str(violation_id), details={"note": body.note} if body.note else {},
+        conn,
+        actor_kind=ActorKind.USER,
+        actor_id=user.id,
+        action=f"violation.{body.review_status.value}",
+        object_type="violation",
+        object_id=str(violation_id),
+        details={"note": body.note} if body.note else {},
     )
     return {"id": violation_id, "review_status": body.review_status.value}

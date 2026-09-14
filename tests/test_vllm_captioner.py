@@ -71,7 +71,10 @@ def remote(monkeypatch):
 def test_multiline_thinking_does_not_leak_into_description_fields():
     description = parse_description_xml(VEHICLE_XML)
     assert description == Description(
-        colour="green", vtype="autorickshaw", make=None, model=None,
+        colour="green",
+        vtype="autorickshaw",
+        make=None,
+        model=None,
         features=["yellow canopy", "R&S signage"],
         caption="A green autorickshaw with a yellow canopy and R&S signage.",
     )
@@ -92,24 +95,35 @@ def test_fenced_xml_is_accepted():
     )
 
 
-@pytest.mark.parametrize("content", [
-    "", None, '{"type":"car"}', "<image><type>car</type></image>",
-    VEHICLE_XML.replace("</image>", ""),
-    VEHICLE_XML.replace("<model/>", "<make/>"),
-    VEHICLE_XML.replace("<model/>", "<model><name>guessed</name></model>"),
-    VEHICLE_XML.replace("<features>", "<features>roof rack"),
-    VEHICLE_XML.replace("<image>", '<image source="example">'),
-    "Here is the answer: " + VEHICLE_XML,
-    '<!DOCTYPE image [<!ENTITY brand "invented">]>' + VEHICLE_XML,
-])
+@pytest.mark.parametrize(
+    "content",
+    [
+        "",
+        None,
+        '{"type":"car"}',
+        "<image><type>car</type></image>",
+        VEHICLE_XML.replace("</image>", ""),
+        VEHICLE_XML.replace("<model/>", "<make/>"),
+        VEHICLE_XML.replace("<model/>", "<model><name>guessed</name></model>"),
+        VEHICLE_XML.replace("<features>", "<features>roof rack"),
+        VEHICLE_XML.replace("<image>", '<image source="example">'),
+        "Here is the answer: " + VEHICLE_XML,
+        '<!DOCTYPE image [<!ENTITY brand "invented">]>' + VEHICLE_XML,
+    ],
+)
 def test_invalid_output_cannot_silently_become_an_empty_description(content):
     with pytest.raises(ValueError):
         parse_description_xml(content)
 
 
-@pytest.mark.parametrize("base_url", [
-    "http://vllm:8008", "http://vllm:8008/", "http://vllm:8008/v1/",
-])
+@pytest.mark.parametrize(
+    "base_url",
+    [
+        "http://vllm:8008",
+        "http://vllm:8008/",
+        "http://vllm:8008/v1/",
+    ],
+)
 def test_request_has_three_xml_examples_and_the_actual_crop(remote, crop, monkeypatch, base_url):
     monkeypatch.setattr(settings, "vllm_max_tokens", 6000)
 
@@ -137,10 +151,16 @@ def test_request_has_three_xml_examples_and_the_actual_crop(remote, crop, monkey
     assert result.colour == "green"
 
 
-@pytest.mark.parametrize("result", [
-    {}, {"choices": []}, chat_response(content=None),
-    chat_response(content="not XML"), chat_response(finish_reason="length"),
-])
+@pytest.mark.parametrize(
+    "result",
+    [
+        {},
+        {"choices": []},
+        chat_response(content=None),
+        chat_response(content="not XML"),
+        chat_response(finish_reason="length"),
+    ],
+)
 def test_invalid_or_truncated_completions_raise(remote, crop, result):
     captioner = remote(lambda request: httpx.Response(200, json=result))
     with pytest.raises(ValueError):
@@ -195,13 +215,21 @@ async def test_describe_persists_xml_attributes_and_embeds_only_caption(remote, 
     worker.embedder = Mock(return_value=[1.0, 0.0])
     worker.model_id = 7
     conn = AsyncMock()
-    job = SimpleNamespace(read_id=uuid.uuid4(), payload={
-        "class": "auto", "permitted_attributes": ["type", "features"],
-    })
+    job = SimpleNamespace(
+        read_id=uuid.uuid4(),
+        payload={
+            "class": "auto",
+            "permitted_attributes": ["type", "features"],
+        },
+    )
     await worker.process(conn, job, crop)
     args = conn.execute.call_args.args
     assert args[1:8] == (
-        job.read_id, None, "autorickshaw", None, None,
+        job.read_id,
+        None,
+        "autorickshaw",
+        None,
+        None,
         ["yellow canopy", "R&S signage"],
         "A green autorickshaw with a yellow canopy and R&S signage.",
     )
@@ -240,7 +268,11 @@ async def test_failed_caption_retries_without_ack_or_successful_write(remote, cr
     monkeypatch.setattr(base.queue, "ack", ack)
     monkeypatch.setattr(base.outbox, "post", post)
     job = SimpleNamespace(
-        id=1, read_id=uuid.uuid4(), crop_ref="crops/test.jpg", payload={}, attempts=1,
+        id=1,
+        read_id=uuid.uuid4(),
+        crop_ref="crops/test.jpg",
+        payload={},
+        attempts=1,
     )
     await worker._handle(job)
     fail.assert_awaited_once()
@@ -254,7 +286,9 @@ async def test_failed_caption_retries_without_ack_or_successful_write(remote, cr
 
 @pytest.mark.parametrize(("concurrency", "expected_limit"), [(1, 1), (2, 2), (12, 8)])
 async def test_long_inference_does_not_leave_prefetched_jobs_waiting_on_a_lease(
-    concurrency, expected_limit, monkeypatch,
+    concurrency,
+    expected_limit,
+    monkeypatch,
 ):
     worker = DescribeWorker(concurrency=concurrency, drain=True)
     monkeypatch.setattr(worker, "setup", AsyncMock())

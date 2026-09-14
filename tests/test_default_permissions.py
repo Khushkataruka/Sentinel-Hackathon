@@ -49,8 +49,9 @@ def test_every_attribute_survives_restrict_to():
     'type' against the sightings column `vtype` is the one that bites."""
     from sentinel.pipelines.models.captioner import Description
 
-    full = Description(colour="red", vtype="car", make="Tata", model="Nexon",
-                       features=["roof rack"], caption="c")
+    full = Description(
+        colour="red", vtype="car", make="Tata", model="Nexon", features=["roof rack"], caption="c"
+    )
     kept = full.restrict_to(ALL_ATTRIBUTES)
 
     assert kept == full, "an attribute in ALL_ATTRIBUTES is spelled wrong"
@@ -58,16 +59,20 @@ def test_every_attribute_survives_restrict_to():
 
 async def test_all_violations_matches_the_catalogue(db):
     """The hardcoded list against the table the trigger actually reads."""
-    codes = [r["code"] for r in await db.fetch(
-        "SELECT code FROM violation_types WHERE enabled ORDER BY code")]
+    codes = [
+        r["code"]
+        for r in await db.fetch("SELECT code FROM violation_types WHERE enabled ORDER BY code")
+    ]
 
     assert sorted(ALL_VIOLATIONS) == codes
 
 
 async def test_every_camera_permits_everything(db):
     """Migration 005 applied, and nothing has written a narrower row since."""
-    codes = [r["code"] for r in await db.fetch(
-        "SELECT code FROM violation_types WHERE enabled ORDER BY code")]
+    codes = [
+        r["code"]
+        for r in await db.fetch("SELECT code FROM violation_types WHERE enabled ORDER BY code")
+    ]
 
     gaps = await db.fetch(
         """
@@ -79,8 +84,10 @@ async def test_every_camera_permits_everything(db):
             OR NOT plate_viable
             OR NOT density_viable
         """,
-        ALL_ATTRIBUTES, codes,
+        ALL_ATTRIBUTES,
+        codes,
     )
 
-    assert not gaps, f"{len(gaps)} profile(s) short of the full grant: " \
-                     f"{[r['camera_id'] for r in gaps]}"
+    assert not gaps, (
+        f"{len(gaps)} profile(s) short of the full grant: {[r['camera_id'] for r in gaps]}"
+    )

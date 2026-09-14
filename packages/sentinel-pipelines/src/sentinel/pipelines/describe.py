@@ -41,9 +41,7 @@ class DescribeWorker(PipelineWorker):
                 "ORDER BY registered_at DESC LIMIT 1"
             )
 
-    async def process(
-        self, conn, job: queue.Job, crop: np.ndarray
-    ) -> dict[str, Any] | None:
+    async def process(self, conn, job: queue.Job, crop: np.ndarray) -> dict[str, Any] | None:
         vehicle_class = job.payload.get("class", "car")
         permitted = job.payload.get("permitted_attributes", [])
 

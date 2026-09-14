@@ -29,16 +29,51 @@ log = get_logger(__name__)
 #: Indian plate formats. Validating against these rejects a large amount of
 #: OCR garbage before it ever reaches the database.
 PLATE_PATTERNS = [
-    re.compile(r"^[A-Z]{2}\d{1,2}[A-Z]{1,3}\d{4}$"),   # GJ01AB1234, modern
+    re.compile(r"^[A-Z]{2}\d{1,2}[A-Z]{1,3}\d{4}$"),  # GJ01AB1234, modern
     re.compile(r"^[A-Z]{2}\d{1,2}[A-Z]{1,2}\d{1,4}$"),  # older short forms
-    re.compile(r"^\d{2}BH\d{4}[A-Z]{1,2}$"),            # Bharat series
+    re.compile(r"^\d{2}BH\d{4}[A-Z]{1,2}$"),  # Bharat series
 ]
 
 STATE_CODES = {
-    "AN", "AP", "AR", "AS", "BR", "CG", "CH", "DD", "DN", "DL", "GA", "GJ",
-    "HP", "HR", "JH", "JK", "KA", "KL", "LA", "LD", "MH", "ML", "MN", "MP",
-    "MZ", "NL", "OD", "OR", "PB", "PY", "RJ", "SK", "TN", "TR", "TS", "UA",
-    "UK", "UP", "WB",
+    "AN",
+    "AP",
+    "AR",
+    "AS",
+    "BR",
+    "CG",
+    "CH",
+    "DD",
+    "DN",
+    "DL",
+    "GA",
+    "GJ",
+    "HP",
+    "HR",
+    "JH",
+    "JK",
+    "KA",
+    "KL",
+    "LA",
+    "LD",
+    "MH",
+    "ML",
+    "MN",
+    "MP",
+    "MZ",
+    "NL",
+    "OD",
+    "OR",
+    "PB",
+    "PY",
+    "RJ",
+    "SK",
+    "TN",
+    "TR",
+    "TS",
+    "UA",
+    "UK",
+    "UP",
+    "WB",
 }
 
 
@@ -141,8 +176,7 @@ class StubPlateReader:
         digits = f"{int(rng.integers(0, 10000)):04d}"
         base = f"{state}{int(rng.integers(1, 39)):02d}{series}{digits}"
 
-        reads = [PlateRead(base, round(0.55 + float(rng.random()) * 0.35, 3), 1,
-                           validate(base))]
+        reads = [PlateRead(base, round(0.55 + float(rng.random()) * 0.35, 3), 1, validate(base))]
         # Alternatives that differ by exactly the confusions OCR really makes,
         # so the fuzzy matcher in correlation has something realistic to chew on.
         confusions = {"0": "D", "1": "I", "8": "B", "5": "S", "2": "Z"}
@@ -154,8 +188,9 @@ class StubPlateReader:
                     break
             text = "".join(variant)
             reads.append(
-                PlateRead(text, round(reads[0].confidence * (0.8 ** (rank - 1)), 3),
-                          rank, validate(text))
+                PlateRead(
+                    text, round(reads[0].confidence * (0.8 ** (rank - 1)), 3), rank, validate(text)
+                )
             )
         return reads
 
@@ -204,6 +239,7 @@ class PyTorchPlateReader:
 
         if self.ocr_engine_type == OCREngine.EASYOCR:
             import easyocr
+
             self.easyocr_reader = easyocr.Reader(["en"], gpu=(self.device == "cuda"))
         else:
             _configure_tesseract()
@@ -272,7 +308,9 @@ class PyTorchPlateReader:
         for img_var in variants:
             for cfg in configs:
                 try:
-                    data = pytesseract.image_to_data(img_var, output_type=pytesseract.Output.DICT, config=cfg)
+                    data = pytesseract.image_to_data(
+                        img_var, output_type=pytesseract.Output.DICT, config=cfg
+                    )
                     n_boxes = len(data.get("text", []))
                     current_results = []
                     total_conf = 0.0
@@ -281,7 +319,12 @@ class PyTorchPlateReader:
                         conf_val = float(data["conf"][i])
                         if not t or conf_val < 0:
                             continue
-                        bx, by, bw, bh = data["left"][i], data["top"][i], data["width"][i], data["height"][i]
+                        bx, by, bw, bh = (
+                            data["left"][i],
+                            data["top"][i],
+                            data["width"][i],
+                            data["height"][i],
+                        )
                         bbox_pts = [[bx, by], [bx + bw, by], [bx + bw, by + bh], [bx, by + bh]]
                         norm_conf = max(0.1, min(1.0, conf_val / 100.0))
                         current_results.append((bbox_pts, t, norm_conf))
@@ -290,7 +333,9 @@ class PyTorchPlateReader:
                     if current_results:
                         score = total_conf
                         # Bonus if it matches Indian format
-                        combined = "".join(re.sub(r"[^A-Z0-9]", "", r[1].upper()) for r in current_results)
+                        combined = "".join(
+                            re.sub(r"[^A-Z0-9]", "", r[1].upper()) for r in current_results
+                        )
                         if validate(combined):
                             score += 10.0
                         if score > max_score:
@@ -480,26 +525,28 @@ class PyTorchPlateReader:
                     int(crop_y1 + ly2),
                 ]
 
-            results.append({
-                "vehicle_bbox": [vx1, vy1, vx2, vy2],
-                "crop_bbox": [crop_x1, crop_y1, crop_x2, crop_y2],
-                "class": cls_name,
-                "vehicle_conf": round(v_conf, 4),
-                "plate_detected": best_read is not None,
-                "plate_bbox": global_lp_bbox,
-                "plate_text": best_read.text if best_read else None,
-                "plate_confidence": best_read.confidence if best_read else None,
-                "valid_format": best_read.valid_format if best_read else False,
-                "hypotheses": [
-                    {
-                        "rank": int(r.rank),
-                        "plate": str(r.text),
-                        "confidence": float(r.confidence),
-                        "valid_format": bool(r.valid_format),
-                    }
-                    for r in reads
-                ],
-            })
+            results.append(
+                {
+                    "vehicle_bbox": [vx1, vy1, vx2, vy2],
+                    "crop_bbox": [crop_x1, crop_y1, crop_x2, crop_y2],
+                    "class": cls_name,
+                    "vehicle_conf": round(v_conf, 4),
+                    "plate_detected": best_read is not None,
+                    "plate_bbox": global_lp_bbox,
+                    "plate_text": best_read.text if best_read else None,
+                    "plate_confidence": best_read.confidence if best_read else None,
+                    "valid_format": best_read.valid_format if best_read else False,
+                    "hypotheses": [
+                        {
+                            "rank": int(r.rank),
+                            "plate": str(r.text),
+                            "confidence": float(r.confidence),
+                            "valid_format": bool(r.valid_format),
+                        }
+                        for r in reads
+                    ],
+                }
+            )
 
         return results
 
@@ -587,10 +634,8 @@ class OnnxPlateReader:
 
     is_stub = False
 
-    def __init__(self, detect_path: Path, ocr_path: Path) -> None:   # pragma: no cover
-        raise NotImplementedError(
-            "ANPR not wired; export the plate detector and reader to ONNX"
-        )
+    def __init__(self, detect_path: Path, ocr_path: Path) -> None:  # pragma: no cover
+        raise NotImplementedError("ANPR not wired; export the plate detector and reader to ONNX")
 
     def __call__(self, crop: np.ndarray, top_k: int = 3) -> list[PlateRead]:  # pragma: no cover
         raise NotImplementedError
@@ -614,30 +659,32 @@ def load_plate_reader(
     curr_dir = Path(__file__).resolve().parent
     root_dir = Path(__file__).resolve().parents[6]
 
-    lp_path = lp_model_path or _find_file([
-        curr_dir / "license-plate-finetune-v1m.pt",
-        curr_dir / "license-plate-finetune-v1n.pt",
-        curr_dir / "plate_detect.pt",
-        settings.plate_detect_model_path
-        if str(settings.plate_detect_model_path).endswith(".pt")
-        else None,
-        settings.plate_detect_model_path.with_suffix(".pt"),
-        root_dir / "var" / "models" / "license-plate-finetune-v1m.pt",
-        root_dir / "var" / "models" / "license-plate-finetune-v1n.pt",
-        root_dir / "var" / "models" / "plate_detect.pt",
-        Path("./var/models/license-plate-finetune-v1m.pt"),
-        Path("./var/models/plate_detect.pt"),
-    ])
+    lp_path = lp_model_path or _find_file(
+        [
+            curr_dir / "license-plate-finetune-v1m.pt",
+            curr_dir / "license-plate-finetune-v1n.pt",
+            curr_dir / "plate_detect.pt",
+            settings.plate_detect_model_path
+            if str(settings.plate_detect_model_path).endswith(".pt")
+            else None,
+            settings.plate_detect_model_path.with_suffix(".pt"),
+            root_dir / "var" / "models" / "license-plate-finetune-v1m.pt",
+            root_dir / "var" / "models" / "license-plate-finetune-v1n.pt",
+            root_dir / "var" / "models" / "plate_detect.pt",
+            Path("./var/models/license-plate-finetune-v1m.pt"),
+            Path("./var/models/plate_detect.pt"),
+        ]
+    )
 
-    veh_path = vehicle_model_path or _find_file([
-        curr_dir / "vehicle_detection_master_v1.pt",
-        settings.detect_model_path
-        if str(settings.detect_model_path).endswith(".pt")
-        else None,
-        settings.detect_model_path.with_suffix(".pt"),
-        root_dir / "var" / "models" / "vehicle_detection_master_v1.pt",
-        Path("./var/models/vehicle_detection_master_v1.pt"),
-    ])
+    veh_path = vehicle_model_path or _find_file(
+        [
+            curr_dir / "vehicle_detection_master_v1.pt",
+            settings.detect_model_path if str(settings.detect_model_path).endswith(".pt") else None,
+            settings.detect_model_path.with_suffix(".pt"),
+            root_dir / "var" / "models" / "vehicle_detection_master_v1.pt",
+            Path("./var/models/vehicle_detection_master_v1.pt"),
+        ]
+    )
 
     if lp_path:
         try:

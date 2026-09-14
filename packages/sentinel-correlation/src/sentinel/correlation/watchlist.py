@@ -46,15 +46,14 @@ def _attribute_match(entry: dict[str, Any], sighting: dict[str, Any]) -> float:
     if not specified:
         return 0.0
     hits = sum(
-        1 for f in specified
+        1
+        for f in specified
         if sighting.get(f) and str(sighting[f]).lower() == str(entry[f]).lower()
     )
     return hits / len(specified)
 
 
-async def check_sighting(
-    conn: asyncpg.Connection, read_id: uuid.UUID
-) -> list[dict[str, Any]]:
+async def check_sighting(conn: asyncpg.Connection, read_id: uuid.UUID) -> list[dict[str, Any]]:
     """Check one completed sighting against every active watchlist entry.
 
     The live path. Cheap by design: it runs on every sighting the platform
@@ -79,9 +78,7 @@ async def check_sighting(
     row = dict(sighting)
     hypotheses = [
         r["plate"]
-        for r in await conn.fetch(
-            "SELECT plate FROM plate_hypotheses WHERE read_id = $1", read_id
-        )
+        for r in await conn.fetch("SELECT plate FROM plate_hypotheses WHERE read_id = $1", read_id)
     ]
 
     raised: list[dict[str, Any]] = []
@@ -120,10 +117,17 @@ async def check_sighting(
             INSERT INTO alerts (watchlist_entry_id, read_id, tier, score)
             VALUES ($1,$2,$3,$4) RETURNING id
             """,
-            entry["id"], read_id, tier.value, score,
+            entry["id"],
+            read_id,
+            tier.value,
+            score,
         )
         await audit.service(
-            conn, "correlation", "alert.raise", "alert", str(alert_id),
+            conn,
+            "correlation",
+            "alert.raise",
+            "alert",
+            str(alert_id),
             {
                 "watchlist_entry": str(entry["id"]),
                 "read_id": str(read_id),
@@ -133,8 +137,7 @@ async def check_sighting(
             },
         )
         raised.append(
-            {"alert_id": str(alert_id), "entry": entry["label"], "tier": tier.value,
-             "score": score}
+            {"alert_id": str(alert_id), "entry": entry["label"], "tier": tier.value, "score": score}
         )
 
     return raised
@@ -171,8 +174,12 @@ async def backfill(
 
     since = datetime.now(tz=None).astimezone() - timedelta(days=lookback_days)
     result = await search.run(
-        conn, description, kind=SearchKind.WATCHLIST_BACKFILL,
-        since=since, requested_by=requested_by, watchlist_entry_id=entry_id,
+        conn,
+        description,
+        kind=SearchKind.WATCHLIST_BACKFILL,
+        since=since,
+        requested_by=requested_by,
+        watchlist_entry_id=entry_id,
     )
 
     # One alert per route, tiered on the route's own score and its competing
@@ -191,30 +198,37 @@ async def backfill(
             INSERT INTO alerts (watchlist_entry_id, route_id, read_id, tier, score)
             VALUES ($1,$2,$3,$4,$5) RETURNING id
             """,
-            entry_id, uuid.UUID(route["route_id"]),
+            entry_id,
+            uuid.UUID(route["route_id"]),
             uuid.UUID(route["read_ids"][0]) if route["read_ids"] else None,
-            tier.value, route["score"],
+            tier.value,
+            route["score"],
         )
         await audit.service(
-            conn, "correlation", "alert.raise_backfill", "alert", str(alert_id),
-            {"watchlist_entry": str(entry_id), "route_id": route["route_id"],
-             "tier": tier.value},
+            conn,
+            "correlation",
+            "alert.raise_backfill",
+            "alert",
+            str(alert_id),
+            {"watchlist_entry": str(entry_id), "route_id": route["route_id"], "tier": tier.value},
         )
         raised += 1
 
-    log.info("watchlist_backfill", entry=str(entry_id),
-             routes=len(result.routes), alerts=raised)
-    return {**result.as_dict(), "alerts_raised": raised,
-            "lookback_days": lookback_days}
+    log.info("watchlist_backfill", entry=str(entry_id), routes=len(result.routes), alerts=raised)
+    return {**result.as_dict(), "alerts_raised": raised, "lookback_days": lookback_days}
 
 
 def candidates_from_alert(rows: list[dict[str, Any]]) -> list[Candidate]:
     """Rehydrate stored candidates for an evidence panel."""
     return [
         Candidate(
-            read_id=r["read_id"], camera_id=r["camera_id"], seen_at=r["seen_at"],
-            score=r.get("score", 0.0), matched_on=r.get("matched_on", []),
-            plate_text=r.get("plate_text"), trust_level=r.get("trust_level", 0.5),
+            read_id=r["read_id"],
+            camera_id=r["camera_id"],
+            seen_at=r["seen_at"],
+            score=r.get("score", 0.0),
+            matched_on=r.get("matched_on", []),
+            plate_text=r.get("plate_text"),
+            trust_level=r.get("trust_level", 0.5),
         )
         for r in rows
     ]

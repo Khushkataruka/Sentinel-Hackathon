@@ -59,8 +59,7 @@ def test_retarget_moves_the_host_and_keeps_everything_else():
 
 
 def test_retarget_preserves_credentials():
-    url = streamurl.with_credentials("rtsp://cctv.corp8.cloud/stream/cam04",
-                                     "a@b.com", "pw")
+    url = streamurl.with_credentials("rtsp://cctv.corp8.cloud/stream/cam04", "a@b.com", "pw")
     moved = streamurl.retarget(url, "10.0.0.1", 8554)
     assert moved == "rtsp://a%40b.com:pw@10.0.0.1:8554/stream/cam04"
 

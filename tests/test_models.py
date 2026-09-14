@@ -58,7 +58,7 @@ def test_the_plate_stub_reads_nothing_most_of_the_time():
 
 def test_plate_format_validation_rejects_garbage():
     assert anpr.validate("GJ01AB1234")
-    assert not anpr.validate("XX99ZZ0000")     # not a state code
+    assert not anpr.validate("XX99ZZ0000")  # not a state code
     assert not anpr.validate("ABC")
 
 
@@ -72,13 +72,17 @@ def test_a_helmet_verdict_can_be_unknown():
 
 def test_the_violation_stub_never_invents_an_unpermitted_type():
     findings = violations.StubViolationDetector()(
-        crop(), vehicle_class="motorcycle", permitted=["no_helmet"],
+        crop(),
+        vehicle_class="motorcycle",
+        permitted=["no_helmet"],
     )
     assert all(f.violation_type == "no_helmet" for f in findings)
 
 
 def test_no_permitted_types_means_no_findings():
     findings = violations.StubViolationDetector()(
-        crop(), vehicle_class="car", permitted=[],
+        crop(),
+        vehicle_class="car",
+        permitted=[],
     )
     assert findings == []

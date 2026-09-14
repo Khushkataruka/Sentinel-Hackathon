@@ -91,7 +91,7 @@ class PtsClock:
 
         if not self.anchored:
             self.anchor(pts_s)
-            return self._anchor_wall, 0.0, False   # type: ignore[return-value]
+            return self._anchor_wall, 0.0, False  # type: ignore[return-value]
 
         previous = self._last_pts_s
         assert previous is not None
@@ -102,7 +102,7 @@ class PtsClock:
             # tell the caller, which flushes tracks and resets the bucket.
             self.discontinuities += 1
             self.anchor(pts_s)
-            return self._anchor_wall, 0.0, True   # type: ignore[return-value]
+            return self._anchor_wall, 0.0, True  # type: ignore[return-value]
 
         self._last_pts_s = pts_s
         wall = self._anchor_wall + timedelta(  # type: ignore[operator]

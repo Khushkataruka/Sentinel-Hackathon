@@ -73,9 +73,12 @@ class IngestSupervisor:
                 if self.only and ref.camera_id not in self.only:
                     continue
                 if ref.camera_id not in known:
-                    log.warning("camera_not_registered", camera=ref.camera_id,
-                                adapter=loaded.name,
-                                action="onboard it first, or run the catalogue sync")
+                    log.warning(
+                        "camera_not_registered",
+                        camera=ref.camera_id,
+                        adapter=loaded.name,
+                        action="onboard it first, or run the catalogue sync",
+                    )
                     continue
                 mapping[ref.camera_id] = loaded.adapter
         return mapping
@@ -84,8 +87,10 @@ class IngestSupervisor:
         backoff = settings.reconnect_backoff_initial_s
         while not self._stopping.is_set():
             worker = CameraWorker(
-                camera_id, adapter,
-                detector=self._detector, detect_model_id=self._detect_model_id,
+                camera_id,
+                adapter,
+                detector=self._detector,
+                detect_model_id=self._detect_model_id,
             )
             self.workers[camera_id] = worker
             try:
@@ -125,8 +130,11 @@ class IngestSupervisor:
             log.error("no_cameras", hint="check adapters, the registry and --only")
             return
 
-        log.info("ingest_starting", cameras=len(cameras),
-                 adapters=sum(1 for a in self.adapters if a.adapter))
+        log.info(
+            "ingest_starting",
+            cameras=len(cameras),
+            adapters=sum(1 for a in self.adapters if a.adapter),
+        )
 
         for camera_id, adapter in cameras.items():
             self.tasks[camera_id] = asyncio.create_task(
@@ -148,7 +156,7 @@ class IngestSupervisor:
         for sig in (signal.SIGINT, signal.SIGTERM):
             try:
                 loop.add_signal_handler(sig, self.stop)
-            except NotImplementedError:      # pragma: no cover - Windows
+            except NotImplementedError:  # pragma: no cover - Windows
                 pass
 
     def stats(self) -> dict[str, Any]:

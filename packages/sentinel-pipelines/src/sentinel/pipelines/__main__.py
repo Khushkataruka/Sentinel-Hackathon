@@ -52,7 +52,8 @@ def main(argv: list[str] | None = None) -> int:
     group.add_argument("--all", action="store_true", help="run all four in one process")
     run.add_argument("--concurrency", type=int, default=2)
     run.add_argument(
-        "--drain", action="store_true",
+        "--drain",
+        action="store_true",
         help="process what is queued and exit, rather than waiting for more",
     )
 

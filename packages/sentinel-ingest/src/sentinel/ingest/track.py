@@ -27,7 +27,7 @@ from sentinel.ingest.detect import Detection
 
 
 class TrackState(Enum):
-    TENTATIVE = auto()   # seen once; not yet a real object
+    TENTATIVE = auto()  # seen once; not yet a real object
     CONFIRMED = auto()
     LOST = auto()
     REMOVED = auto()
@@ -68,9 +68,7 @@ def class_mask(track_classes: list[str], det_classes: list[str]) -> np.ndarray:
     """
     if not track_classes or not det_classes:
         return np.zeros((len(track_classes), len(det_classes)))
-    return (
-        np.array(track_classes)[:, None] == np.array(det_classes)[None, :]
-    ).astype(float)
+    return (np.array(track_classes)[:, None] == np.array(det_classes)[None, :]).astype(float)
 
 
 def greedy_match(
@@ -115,16 +113,14 @@ class KalmanBox:
         self._vel_weight = 1.0 / 160
 
     def predict(self, dt_s: float) -> None:
-        dt = float(np.clip(dt_s, 0.0, 1.0))   # a long gap must not fling the box
+        dt = float(np.clip(dt_s, 0.0, 1.0))  # a long gap must not fling the box
         F = np.eye(8)
         for i in range(4):
             F[i, i + 4] = dt
 
         h = max(self.mean[3], 1.0)
-        q_pos = np.array([self._pos_weight * h, self._pos_weight * h, 1e-2,
-                          self._pos_weight * h])
-        q_vel = np.array([self._vel_weight * h, self._vel_weight * h, 1e-5,
-                          self._vel_weight * h])
+        q_pos = np.array([self._pos_weight * h, self._pos_weight * h, 1e-2, self._pos_weight * h])
+        q_vel = np.array([self._vel_weight * h, self._vel_weight * h, 1e-5, self._vel_weight * h])
         Q = np.diag(np.concatenate([q_pos, q_vel]) ** 2) * max(dt, 1e-3)
 
         self.mean = F @ self.mean
@@ -135,8 +131,7 @@ class KalmanBox:
         H[:4, :4] = np.eye(4)
         h = max(self.mean[3], 1.0)
         R = np.diag(
-            np.array([self._pos_weight * h, self._pos_weight * h, 1e-1,
-                      self._pos_weight * h]) ** 2
+            np.array([self._pos_weight * h, self._pos_weight * h, 1e-1, self._pos_weight * h]) ** 2
         )
         S = H @ self.covariance @ H.T + R
         K = self.covariance @ H.T @ np.linalg.inv(S)
@@ -159,9 +154,7 @@ class Track:
     #: Per-frame history the best-frame chooser and the violation pipeline
     #: read: (pts_s, bbox, score). Bounded, because a vehicle stuck at a
     #: signal for four minutes must not grow this without limit.
-    history: list[tuple[float, tuple[int, int, int, int], float]] = field(
-        default_factory=list
-    )
+    history: list[tuple[float, tuple[int, int, int, int], float]] = field(default_factory=list)
 
     MAX_HISTORY = 300
 
@@ -290,10 +283,7 @@ class ByteTrack:
             track.time_since_update_s += dt_s
 
         high = [d for d in detections if d.score >= self.high_threshold]
-        low = [
-            d for d in detections
-            if self.low_threshold <= d.score < self.high_threshold
-        ]
+        low = [d for d in detections if self.low_threshold <= d.score < self.high_threshold]
 
         candidates = [t for t in self.tracks if t.state is not TrackState.REMOVED]
         track_boxes = np.array([t.bbox for t in candidates], dtype=float).reshape(-1, 4)

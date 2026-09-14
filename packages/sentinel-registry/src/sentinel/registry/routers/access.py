@@ -34,14 +34,25 @@ async def grant(body: GrantIn, conn: DbTxn, user: Admin):
     cameras' always has a recorded answer.
     """
     grant_id = await repo.create_grant(
-        conn, user_id=body.user_id, department_id=body.department_id,
-        granted_by=uuid.UUID(user.id), reason=body.reason, expires_at=body.expires_at,
+        conn,
+        user_id=body.user_id,
+        department_id=body.department_id,
+        granted_by=uuid.UUID(user.id),
+        reason=body.reason,
+        expires_at=body.expires_at,
     )
     await audit.write(
-        conn, actor_kind=ActorKind.USER, actor_id=user.id, action="access_grant.create",
-        object_type="access_grant", object_id=str(grant_id),
-        details={"user_id": str(body.user_id), "department_id": body.department_id,
-                 "reason": body.reason},
+        conn,
+        actor_kind=ActorKind.USER,
+        actor_id=user.id,
+        action="access_grant.create",
+        object_type="access_grant",
+        object_id=str(grant_id),
+        details={
+            "user_id": str(body.user_id),
+            "department_id": body.department_id,
+            "reason": body.reason,
+        },
     )
     return {"id": grant_id}
 
@@ -51,6 +62,10 @@ async def revoke(grant_id: int, conn: DbTxn, user: Admin):
     if not await repo.revoke_grant(conn, grant_id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no live grant with that id")
     await audit.write(
-        conn, actor_kind=ActorKind.USER, actor_id=user.id, action="access_grant.revoke",
-        object_type="access_grant", object_id=str(grant_id),
+        conn,
+        actor_kind=ActorKind.USER,
+        actor_id=user.id,
+        action="access_grant.revoke",
+        object_type="access_grant",
+        object_id=str(grant_id),
     )

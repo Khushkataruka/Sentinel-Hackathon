@@ -15,19 +15,27 @@ def candidate(seconds, camera="CAM-1", trust=1.0, matched=("attribute",)):
         read_id=__import__("uuid").uuid4(),
         camera_id=camera,
         seen_at=datetime(2026, 9, 2, 10, 0, 0, tzinfo=UTC) + timedelta(seconds=seconds),
-        score=1.0, matched_on=list(matched), trust_level=trust,
+        score=1.0,
+        matched_on=list(matched),
+        trust_level=trust,
     )
 
 
 def route(n_legs, trust=1.0, plate=False):
     matched = ("attribute", "plate") if plate else ("attribute",)
-    sightings = [
-        candidate(i * 300, f"CAM-{i}", trust, matched) for i in range(n_legs + 1)
-    ]
+    sightings = [candidate(i * 300, f"CAM-{i}", trust, matched) for i in range(n_legs + 1)]
     legs = [
-        Leg(i + 1, sightings[i].read_id, sightings[i + 1].read_id,
-            sightings[i].camera_id, sightings[i + 1].camera_id,
-            2.0, 300.0, 24.0, True)
+        Leg(
+            i + 1,
+            sightings[i].read_id,
+            sightings[i + 1].read_id,
+            sightings[i].camera_id,
+            sightings[i + 1].camera_id,
+            2.0,
+            300.0,
+            24.0,
+            True,
+        )
         for i in range(n_legs)
     ]
     return RouteCandidate(sightings=sightings, legs=legs)
@@ -84,8 +92,12 @@ def test_a_weak_match_is_dismissed():
 def test_explain_adds_up_to_the_score():
     r = route(2, plate=True)
     parts = scoring.explain(r, 500)
-    total = (parts["trust_weighted"] + parts["rarity_weighted"]
-             + parts["plate_weighted"] + parts["length_weighted"])
+    total = (
+        parts["trust_weighted"]
+        + parts["rarity_weighted"]
+        + parts["plate_weighted"]
+        + parts["length_weighted"]
+    )
     assert abs(total - parts["total"]) < 1e-3
 
 

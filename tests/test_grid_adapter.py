@@ -68,9 +68,7 @@ def test_enumerate_never_carries_credentials(adapter):
 
 def test_open_attaches_credentials_percent_encoded(adapter):
     handle = adapter.open("cam04")
-    assert handle.url == (
-        "rtsp://alice%40example.com:hunter2@103.250.160.189:8554/stream/cam04"
-    )
+    assert handle.url == ("rtsp://alice%40example.com:hunter2@103.250.160.189:8554/stream/cam04")
     assert handle.transport == "tcp"
     assert handle.options["rtsp_transport"] == "tcp"
 

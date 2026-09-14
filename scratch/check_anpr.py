@@ -23,7 +23,9 @@ reads = reader(dummy_crop, top_k=3)
 print("\n--- Test Crop Reading Results ---")
 if reads:
     for r in reads:
-        print(f"Rank {r.rank}: Plate='{r.text}', Confidence={r.confidence}, ValidFormat={r.valid_format}")
+        print(
+            f"Rank {r.rank}: Plate='{r.text}', Confidence={r.confidence}, ValidFormat={r.valid_format}"
+        )
 else:
     print("No plates detected in dummy test crop.")
 

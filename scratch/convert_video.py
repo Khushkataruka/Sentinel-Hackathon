@@ -11,11 +11,15 @@ temp_output = Path("out/demo_run/videos/cctv052x2004080516x01638.h264.mp4")
 cmd = [
     ffmpeg_path,
     "-y",
-    "-i", str(input_file),
-    "-c:v", "libx264",
-    "-pix_fmt", "yuv420p",
-    "-movflags", "+faststart",
-    str(temp_output)
+    "-i",
+    str(input_file),
+    "-c:v",
+    "libx264",
+    "-pix_fmt",
+    "yuv420p",
+    "-movflags",
+    "+faststart",
+    str(temp_output),
 ]
 
 res = subprocess.run(cmd, capture_output=True, text=True)

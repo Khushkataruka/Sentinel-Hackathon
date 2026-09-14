@@ -12,7 +12,14 @@ import numpy as np
 
 # Ensure sentinel packages are on sys.path
 root_dir = Path(__file__).resolve().parents[2]
-for pkg in ["sentinel-core", "sentinel-registry", "sentinel-ingest", "sentinel-pipelines", "sentinel-correlation", "sentinel-api"]:
+for pkg in [
+    "sentinel-core",
+    "sentinel-registry",
+    "sentinel-ingest",
+    "sentinel-pipelines",
+    "sentinel-correlation",
+    "sentinel-api",
+]:
     pkg_src = root_dir / "packages" / pkg / "src"
     if pkg_src.exists() and str(pkg_src) not in sys.path:
         sys.path.insert(0, str(pkg_src))
@@ -43,9 +50,13 @@ def run_anpr_on_image(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     if save_artifacts:
-        print("[WARNING] Artifact saving is ENABLED. Note: saving image artifacts to disk (annotated frames, crops) may slow down pipeline throughput.")
+        print(
+            "[WARNING] Artifact saving is ENABLED. Note: saving image artifacts to disk (annotated frames, crops) may slow down pipeline throughput."
+        )
     else:
-        print("[INFO] Artifact saving is DISABLED. Skipping image file generation to maximize pipeline throughput.")
+        print(
+            "[INFO] Artifact saving is DISABLED. Skipping image file generation to maximize pipeline throughput."
+        )
 
     if not image_path.exists():
         raise FileNotFoundError(f"Input image not found: {image_path}")
@@ -88,26 +99,28 @@ def run_anpr_on_image(
         if reads:
             best = [r for r in reads if r.valid_format]
             best_read = best[0] if best else reads[0]
-            results.append({
-                "vehicle_bbox": [0, 0, w, h],
-                "crop_bbox": [0, 0, w, h],
-                "class": "vehicle",
-                "vehicle_conf": 1.0,
-                "plate_detected": True,
-                "plate_bbox": list(best_read.bbox) if best_read.bbox else None,
-                "plate_text": best_read.text,
-                "plate_confidence": best_read.confidence,
-                "valid_format": best_read.valid_format,
-                "hypotheses": [
-                    {
-                        "rank": int(r.rank),
-                        "plate": str(r.text),
-                        "confidence": float(r.confidence),
-                        "valid_format": bool(r.valid_format),
-                    }
-                    for r in reads
-                ],
-            })
+            results.append(
+                {
+                    "vehicle_bbox": [0, 0, w, h],
+                    "crop_bbox": [0, 0, w, h],
+                    "class": "vehicle",
+                    "vehicle_conf": 1.0,
+                    "plate_detected": True,
+                    "plate_bbox": list(best_read.bbox) if best_read.bbox else None,
+                    "plate_text": best_read.text,
+                    "plate_confidence": best_read.confidence,
+                    "valid_format": best_read.valid_format,
+                    "hypotheses": [
+                        {
+                            "rank": int(r.rank),
+                            "plate": str(r.text),
+                            "confidence": float(r.confidence),
+                            "valid_format": bool(r.valid_format),
+                        }
+                        for r in reads
+                    ],
+                }
+            )
 
     print(f"[INFO] Detected {len(results)} vehicle/plate instances.")
 
@@ -116,7 +129,7 @@ def run_anpr_on_image(
     for idx, item in enumerate(results, start=1):
         vx1, vy1, vx2, vy2 = item["vehicle_bbox"]
         # Crop vehicle
-        v_crop = frame[max(0, vy1):min(h, vy2), max(0, vx1):min(w, vx2)]
+        v_crop = frame[max(0, vy1) : min(h, vy2), max(0, vx1) : min(w, vx2)]
         if save_artifacts and v_crop.size > 0:
             v_crop_path = output_dir / f"vehicle_crop_{idx}.png"
             cv2.imwrite(str(v_crop_path), v_crop)

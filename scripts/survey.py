@@ -36,7 +36,9 @@ MISSING = object()
 def call(registry: str, method: str, path: str, user: str, body=None, allow_404=False):
     data = json.dumps(body).encode() if body is not None else None
     request = urllib.request.Request(
-        f"{registry.rstrip('/')}{path}", data=data, method=method,
+        f"{registry.rstrip('/')}{path}",
+        data=data,
+        method=method,
         headers={"Content-Type": "application/json", "X-Sentinel-User": user},
     )
     try:
@@ -73,15 +75,20 @@ def backlog(registry: str, user: str) -> list[tuple[str, str, dict | None]]:
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description=__doc__,
-                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     p.add_argument("--registry", default=DEFAULT_REGISTRY)
     p.add_argument("--user", default="admin")
     p.add_argument("--camera", help="one camera id")
     p.add_argument("--all", action="store_true", help="every camera in the backlog")
     p.add_argument("--list", action="store_true", help="show what is waiting")
-    p.add_argument("--loop-period", type=float, default=None,
-                   help="seconds of PTS between loop points, from preflight")
+    p.add_argument(
+        "--loop-period",
+        type=float,
+        default=None,
+        help="seconds of PTS between loop points, from preflight",
+    )
     args = p.parse_args()
 
     if args.list:
@@ -117,14 +124,17 @@ def main() -> int:
             "loop_period_s": args.loop_period or (existing or {}).get("loop_period_s"),
             "distortion": {"survey": "provisional; updated to permit everything for testing"},
         }
-        result = call(args.registry, "PUT", f"/cameras/{camera_id}/profile",
-                      args.user, profile)
-        print(f"{camera_id:>6}  {result['resolution_class']:<9} "
-              f"attrs={','.join(result['permitted_attributes']) or '-':<18} "
-              f"trust={result['trust_level']:<5} loop={result.get('loop_period_s')}")
+        result = call(args.registry, "PUT", f"/cameras/{camera_id}/profile", args.user, profile)
+        print(
+            f"{camera_id:>6}  {result['resolution_class']:<9} "
+            f"attrs={','.join(result['permitted_attributes']) or '-':<18} "
+            f"trust={result['trust_level']:<5} loop={result.get('loop_period_s')}"
+        )
 
-    print(f"\n{len(targets)} provisional profile(s) written. "
-          "Violations and plates are on: the grant is the default, not a survey.")
+    print(
+        f"\n{len(targets)} provisional profile(s) written. "
+        "Violations and plates are on: the grant is the default, not a survey."
+    )
     return 0
 
 

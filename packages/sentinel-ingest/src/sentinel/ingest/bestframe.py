@@ -22,8 +22,8 @@ TWO_WHEELER_CLASSES = {"motorcycle", "bicycle"}
 @dataclass
 class BestFrame:
     pts_s: float
-    bbox: tuple[int, int, int, int]          # the vehicle, in frame pixels
-    crop_bbox: tuple[int, int, int, int]     # where `crop` was cut, same space
+    bbox: tuple[int, int, int, int]  # the vehicle, in frame pixels
+    crop_bbox: tuple[int, int, int, int]  # where `crop` was cut, same space
     score: float
     crop: np.ndarray
 
@@ -89,11 +89,7 @@ def choose(
             the frames the caller kept are available; the rest are gone, and
             that is fine.
     """
-    candidates = [
-        (pts, bbox, det_score)
-        for pts, bbox, det_score in track.history
-        if pts in frames
-    ]
+    candidates = [(pts, bbox, det_score) for pts, bbox, det_score in track.history if pts in frames]
     if not candidates:
         return None
 
@@ -137,8 +133,11 @@ def choose(
         if score > best_score:
             best_score = score
             best = BestFrame(
-                pts_s=pts, bbox=bbox, crop_bbox=crop_bbox,
-                score=score, crop=crop.copy(),
+                pts_s=pts,
+                bbox=bbox,
+                crop_bbox=crop_bbox,
+                score=score,
+                crop=crop.copy(),
             )
 
     return best

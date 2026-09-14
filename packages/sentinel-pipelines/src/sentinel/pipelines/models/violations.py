@@ -63,11 +63,11 @@ SUPPORTED = frozenset({"no_helmet", "triple_riding", "phone_use"})
 
 @dataclass
 class RiderBox:
-    slot: int                       # 1 = rider, 2+ = pillion
+    slot: int  # 1 = rider, 2+ = pillion
     bbox: tuple[int, int, int, int]
-    helmet: bool | None = None      # None = not assessable on this camera
+    helmet: bool | None = None  # None = not assessable on this camera
     helmet_conf: float | None = None
-    score: float = 1.0              # the rider box's own detection score
+    score: float = 1.0  # the rider box's own detection score
 
 
 @dataclass
@@ -124,8 +124,13 @@ class StubRiderDetector:
             # which is different from "no helmet" and must stay different.
             helmet = None if confidence < 0.45 else bool(rng.random() > 0.35)
             riders.append(
-                RiderBox(slot, (left, top, right, bottom), helmet,
-                         confidence if helmet is not None else None, confidence)
+                RiderBox(
+                    slot,
+                    (left, top, right, bottom),
+                    helmet,
+                    confidence if helmet is not None else None,
+                    confidence,
+                )
             )
         return riders
 
@@ -381,8 +386,10 @@ class YoloViolationDetector:
                         violation_type="phone_use",
                         confidence=best.score,
                         bbox=best.xyxy,
-                        details={"vehicle_class": vehicle_class,
-                                 "through_glass": vehicle_class not in ("motorcycle", "bicycle")},
+                        details={
+                            "vehicle_class": vehicle_class,
+                            "through_glass": vehicle_class not in ("motorcycle", "bicycle"),
+                        },
                     )
                 )
 
@@ -426,8 +433,11 @@ def load_violation_detector() -> ViolationDetector:
 
     phone_path = Path(settings.phone_model_path)
     if not phone_path.exists():
-        log.warning("no_phone_weights", expected_at=str(phone_path),
-                    effect="phone_use will not fire even where it is permitted")
+        log.warning(
+            "no_phone_weights",
+            expected_at=str(phone_path),
+            effect="phone_use will not fire even where it is permitted",
+        )
         phone_path = None
 
     try:

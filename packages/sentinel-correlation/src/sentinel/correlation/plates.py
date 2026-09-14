@@ -30,8 +30,8 @@ CONFUSION_CLASSES = [
     {"M", "N"},
 ]
 
-CONFUSION_COST = 0.25      # a confusable swap
-SUBSTITUTION_COST = 1.0    # any other swap
+CONFUSION_COST = 0.25  # a confusable swap
+SUBSTITUTION_COST = 1.0  # any other swap
 INDEL_COST = 1.0
 
 

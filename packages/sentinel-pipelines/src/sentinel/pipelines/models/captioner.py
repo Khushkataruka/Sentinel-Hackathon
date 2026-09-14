@@ -41,8 +41,15 @@ MODELS = {
     "honda": ["city", "amaze", "jazz"],
     "kia": ["seltos", "sonet", "carens"],
 }
-FEATURES = ["roof carrier", "bull bar", "tinted windows", "taxi livery",
-            "damaged bumper", "roof rack", "commercial signage"]
+FEATURES = [
+    "roof carrier",
+    "bull bar",
+    "tinted windows",
+    "taxi livery",
+    "damaged bumper",
+    "roof rack",
+    "commercial signage",
+]
 
 
 @dataclass
@@ -110,9 +117,7 @@ class StubCaptioner:
             make = MAKES[int(rng.integers(len(MAKES)))]
             model = MODELS[make][int(rng.integers(len(MODELS[make])))]
 
-        features = (
-            [FEATURES[int(rng.integers(len(FEATURES)))]] if rng.random() < 0.25 else []
-        )
+        features = [FEATURES[int(rng.integers(len(FEATURES)))]] if rng.random() < 0.25 else []
         parts = [p for p in (colour, make, model, vtype) if p]
         caption = self.STUB_PREFIX + " ".join(parts)
         if features:
@@ -132,7 +137,7 @@ class OnnxCaptioner:
 
     is_stub = False
 
-    def __init__(self, model_path: Path) -> None:      # pragma: no cover
+    def __init__(self, model_path: Path) -> None:  # pragma: no cover
         raise NotImplementedError(
             "captioning model not wired; export to ONNX and implement __call__"
         )
@@ -161,8 +166,9 @@ class StubCaptionEmbedder:
 
     def __init__(self, dim: int | None = None) -> None:
         self.dim = dim or settings.caption_embedding_dim
-        log.warning("stub_caption_embedder", dim=self.dim,
-                    reason="hashed bag-of-words, not semantic")
+        log.warning(
+            "stub_caption_embedder", dim=self.dim, reason="hashed bag-of-words, not semantic"
+        )
 
     def __call__(self, text: str) -> list[float]:
         vector = np.zeros(self.dim, dtype=np.float32)

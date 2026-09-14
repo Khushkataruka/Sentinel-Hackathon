@@ -76,19 +76,26 @@ def caption_messages(image_data_url: str, vehicle_class: str) -> list[dict]:
         prompt = f"Format example {index + 1}. {observation}"
         if index == 0:
             prompt = XML_INSTRUCTIONS + "\n" + prompt
-        messages.extend([
-            {"role": "user", "content": prompt},
-            {"role": "assistant", "content": answer},
-        ])
-    messages.append({
-        "role": "user",
-        "content": [
-            {"type": "text", "text": (
-                "Now describe this image using the same XML format. "
-                f"Detector class hint: {vehicle_class}. "
-                "Use only this image's visible details, not the example vehicles."
-            )},
-            {"type": "image_url", "image_url": {"url": image_data_url}},
-        ],
-    })
+        messages.extend(
+            [
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": answer},
+            ]
+        )
+    messages.append(
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": (
+                        "Now describe this image using the same XML format. "
+                        f"Detector class hint: {vehicle_class}. "
+                        "Use only this image's visible details, not the example vehicles."
+                    ),
+                },
+                {"type": "image_url", "image_url": {"url": image_data_url}},
+            ],
+        }
+    )
     return messages

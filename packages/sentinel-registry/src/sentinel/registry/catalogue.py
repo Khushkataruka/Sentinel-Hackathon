@@ -136,8 +136,11 @@ def load_coordinates(path: Path | str | None = None) -> dict[str, dict[str, Any]
     """
     p = Path(path or os.environ.get("SENTINEL_COORDINATE_FILE") or DEFAULT_COORDINATE_FILE)
     if not p.exists():
-        log.warning("no_coordinate_file", path=str(p),
-                    consequence="cameras without a position cannot be onboarded")
+        log.warning(
+            "no_coordinate_file",
+            path=str(p),
+            consequence="cameras without a position cannot be onboarded",
+        )
         return {}
 
     data = json.loads(p.read_text())
@@ -234,18 +237,18 @@ async def sync(
             continue
         camera_id = str(camera_id)
 
-        position = coordinates.get(camera_id) or coordinates.get(
-            _canonical_id(camera_id)
-        )
+        position = coordinates.get(camera_id) or coordinates.get(_canonical_id(camera_id))
         if not position:
             # A camera with no position cannot go on the map, cannot take
             # part in coverage analysis, and cannot have a route leg
             # validated against it. Reported, not invented.
-            skipped.append({
-                "camera_id": camera_id,
-                "location": str(_pick(entry, "location", default="")),
-                "reason": "no coordinate for this id; add one to the coordinate file",
-            })
+            skipped.append(
+                {
+                    "camera_id": camera_id,
+                    "location": str(_pick(entry, "location", default="")),
+                    "reason": "no coordinate for this id; add one to the coordinate file",
+                }
+            )
             continue
 
         quality = str(position.get("quality", "guess"))
@@ -257,54 +260,64 @@ async def sync(
         # catalogue's RTSP entry may name the CDN, which cannot carry RTSP,
         # and may arrive with credentials already on it, which must not be
         # written to a database row. The adapter re-attaches them at open().
-        rtsp = streamurl.retarget(
-            streamurl.strip_credentials(str(
-                _pick(entry, "rtsp_url", "rtsp", "rtspUrl") or ""
-            )),
-            settings.grid_media_host or None, settings.grid_rtsp_port,
-        ) or None
+        rtsp = (
+            streamurl.retarget(
+                streamurl.strip_credentials(str(_pick(entry, "rtsp_url", "rtsp", "rtspUrl") or "")),
+                settings.grid_media_host or None,
+                settings.grid_rtsp_port,
+            )
+            or None
+        )
         hls = _pick(entry, "hls_live_url", "hls_url", "hls")
 
         # `location` is a place name, which is exactly what an operator wants
         # to read on an alert. It is the camera's name, not its position.
         name = str(_pick(entry, "location", "name", "title", default=camera_id))
 
-        await repo.upsert_camera(conn, CameraIn(
-            camera_id=camera_id,
-            department_id=department_id,
-            name=name,
-            kind=CameraKind.IP,
-            vendor="sentinel-grid",
-            # How ingest will actually decode this camera, which is the
-            # deployment's choice: RTSP off the gateway, or HLS off the CDN
-            # where 8554/TCP is closed.
-            protocol="hls" if settings.grid_prefer_hls else "rtsp",
-            adapter_id=adapter_id,
-            lat=float(position["lat"]),
-            lon=float(position["lon"]),
-            storage_kind="grid",
-            enabled=bool(_pick(entry, "live", "online", "enabled", default=True)),
-        ))
+        await repo.upsert_camera(
+            conn,
+            CameraIn(
+                camera_id=camera_id,
+                department_id=department_id,
+                name=name,
+                kind=CameraKind.IP,
+                vendor="sentinel-grid",
+                # How ingest will actually decode this camera, which is the
+                # deployment's choice: RTSP off the gateway, or HLS off the CDN
+                # where 8554/TCP is closed.
+                protocol="hls" if settings.grid_prefer_hls else "rtsp",
+                adapter_id=adapter_id,
+                lat=float(position["lat"]),
+                lon=float(position["lon"]),
+                storage_kind="grid",
+                enabled=bool(_pick(entry, "live", "online", "enabled", default=True)),
+            ),
+        )
 
         # Provisional profile, only where none exists. Never overwrite a survey.
         if await repo.get_profile(conn, camera_id) is None:
-            await repo.upsert_profile(conn, camera_id, CameraProfileIn(
-                resolution_class=_resolution_class(
-                    int(width) if width else None, int(height) if height else None
+            await repo.upsert_profile(
+                conn,
+                camera_id,
+                CameraProfileIn(
+                    resolution_class=_resolution_class(
+                        int(width) if width else None, int(height) if height else None
+                    ),
+                    # A synced camera is granted everything, unsurveyed:
+                    # permitted_attributes, permitted_violations, plate_viable and
+                    # density_viable are left to the CameraProfileIn defaults on
+                    # purpose, so the grant has one place to change.
+                    # A decoder hint only. The declared rate does not match the
+                    # delivery rate, and nothing time-derived may read it.
+                    decode_fps=min(float(declared_fps), settings.target_decode_fps)
+                    if declared_fps
+                    else settings.target_decode_fps,
+                    trust_level=round(
+                        UNSURVEYED_TRUST * POSITION_QUALITY_TRUST.get(quality, 0.4), 3
+                    ),
+                    loop_period_s=None,  # measure with `sentinel-ingest preflight`
                 ),
-                # A synced camera is granted everything, unsurveyed:
-                # permitted_attributes, permitted_violations, plate_viable and
-                # density_viable are left to the CameraProfileIn defaults on
-                # purpose, so the grant has one place to change.
-                # A decoder hint only. The declared rate does not match the
-                # delivery rate, and nothing time-derived may read it.
-                decode_fps=min(float(declared_fps), settings.target_decode_fps)
-                if declared_fps else settings.target_decode_fps,
-                trust_level=round(
-                    UNSURVEYED_TRUST * POSITION_QUALITY_TRUST.get(quality, 0.4), 3
-                ),
-                loop_period_s=None,          # measure with `sentinel-ingest preflight`
-            ))
+            )
 
         if adapter_id is not None:
             await conn.execute(
@@ -313,22 +326,36 @@ async def sync(
                     COALESCE(config, '{}'), ARRAY['cameras', $2], $3::jsonb, true)
                  WHERE id = $1
                 """,
-                adapter_id, camera_id,
-                {"rtsp_url": rtsp, "hls_url": hls, "codec": codec,
-                 "width": width, "height": height,
-                 "declared_fps": declared_fps, "position_quality": quality},
+                adapter_id,
+                camera_id,
+                {
+                    "rtsp_url": rtsp,
+                    "hls_url": hls,
+                    "codec": codec,
+                    "width": width,
+                    "height": height,
+                    "declared_fps": declared_fps,
+                    "position_quality": quality,
+                },
             )
 
-        synced.append({"camera_id": camera_id, "name": name,
-                       "position_quality": quality, "codec": codec or "unstated"})
+        synced.append(
+            {
+                "camera_id": camera_id,
+                "name": name,
+                "position_quality": quality,
+                "codec": codec or "unstated",
+            }
+        )
 
     quality_counts: dict[str, int] = {}
     for item in synced:
         q = item["position_quality"]
         quality_counts[q] = quality_counts.get(q, 0) + 1
 
-    log.info("catalogue_sync", synced=len(synced), skipped=len(skipped),
-             position_quality=quality_counts)
+    log.info(
+        "catalogue_sync", synced=len(synced), skipped=len(skipped), position_quality=quality_counts
+    )
 
     return {
         "synced": [s["camera_id"] for s in synced],
@@ -342,5 +369,7 @@ async def sync(
             f"{quality_counts.get('guess', 0)} of {len(synced)} cameras have "
             "guessed positions; their route distances and speed checks are "
             "unreliable and their trust_level is reduced accordingly"
-        ) if quality_counts.get("guess") else None,
+        )
+        if quality_counts.get("guess")
+        else None,
     }

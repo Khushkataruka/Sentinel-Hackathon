@@ -59,9 +59,7 @@ async def load_geometry(
     return {r["camera_id"]: CameraGeometry(**dict(r)) for r in rows}
 
 
-async def great_circle_km(
-    conn: asyncpg.Connection, a: CameraGeometry, b: CameraGeometry
-) -> float:
+async def great_circle_km(conn: asyncpg.Connection, a: CameraGeometry, b: CameraGeometry) -> float:
     """Straight-line distance between two cameras.
 
     PostGIS does this properly on the spheroid. It is a lower bound on road
@@ -74,7 +72,10 @@ async def great_circle_km(
         await conn.fetchval(
             "SELECT ST_Distance(ST_MakePoint($1,$2)::geography,"
             " ST_MakePoint($3,$4)::geography) / 1000.0",
-            a.lon, a.lat, b.lon, b.lat,
+            a.lon,
+            a.lat,
+            b.lon,
+            b.lat,
         )
     )
 
@@ -95,10 +96,15 @@ class Leg:
 
     def to_model(self) -> RouteLeg:
         return RouteLeg(
-            seq=self.seq, from_read_id=self.from_read_id, to_read_id=self.to_read_id,
-            distance_km=self.distance_km, elapsed_s=self.elapsed_s,
-            required_speed_kmh=self.required_speed_kmh, plausible=self.plausible,
-            drop_reason=self.drop_reason, gap_s=self.gap_s,
+            seq=self.seq,
+            from_read_id=self.from_read_id,
+            to_read_id=self.to_read_id,
+            distance_km=self.distance_km,
+            elapsed_s=self.elapsed_s,
+            required_speed_kmh=self.required_speed_kmh,
+            plausible=self.plausible,
+            drop_reason=self.drop_reason,
+            gap_s=self.gap_s,
         )
 
 
@@ -143,14 +149,34 @@ async def evaluate_leg(
     elapsed = (b.seen_at - a.seen_at).total_seconds()
 
     if ga is None or gb is None:
-        return Leg(seq, a.read_id, b.read_id, a.camera_id, b.camera_id,
-                   0.0, elapsed, 0.0, False, "camera geometry unknown")
+        return Leg(
+            seq,
+            a.read_id,
+            b.read_id,
+            a.camera_id,
+            b.camera_id,
+            0.0,
+            elapsed,
+            0.0,
+            False,
+            "camera geometry unknown",
+        )
 
     distance = await great_circle_km(conn, ga, gb)
 
     if elapsed <= 0:
-        return Leg(seq, a.read_id, b.read_id, a.camera_id, b.camera_id,
-                   distance, elapsed, 0.0, False, "sightings not in time order")
+        return Leg(
+            seq,
+            a.read_id,
+            b.read_id,
+            a.camera_id,
+            b.camera_id,
+            distance,
+            elapsed,
+            0.0,
+            False,
+            "sightings not in time order",
+        )
 
     speed = distance / (elapsed / 3600.0)
 
@@ -176,8 +202,19 @@ async def evaluate_leg(
     elif plausible and distance > 2.0:
         gap_s = elapsed
 
-    return Leg(seq, a.read_id, b.read_id, a.camera_id, b.camera_id,
-               distance, elapsed, speed, plausible, reason, gap_s)
+    return Leg(
+        seq,
+        a.read_id,
+        b.read_id,
+        a.camera_id,
+        b.camera_id,
+        distance,
+        elapsed,
+        speed,
+        plausible,
+        reason,
+        gap_s,
+    )
 
 
 async def enumerate_routes(
@@ -241,14 +278,22 @@ async def enumerate_routes(
             sightings = [ordered[i] for i in path]
             legs = [
                 Leg(
-                    seq=k + 1, **{
+                    seq=k + 1,
+                    **{
                         f: getattr(hops[(path[k], path[k + 1])], f)
                         for f in (
-                            "from_read_id", "to_read_id", "from_camera", "to_camera",
-                            "distance_km", "elapsed_s", "required_speed_kmh",
-                            "plausible", "drop_reason", "gap_s",
+                            "from_read_id",
+                            "to_read_id",
+                            "from_camera",
+                            "to_camera",
+                            "distance_km",
+                            "elapsed_s",
+                            "required_speed_kmh",
+                            "plausible",
+                            "drop_reason",
+                            "gap_s",
                         )
-                    }
+                    },
                 )
                 for k in range(len(path) - 1)
             ]
@@ -262,16 +307,20 @@ async def enumerate_routes(
             # The competing-route count is evidence an operator reads. A
             # capped count understates uncertainty, so it is marked rather
             # than quietly returned as if it were complete.
-            log.warning("route_enumeration_capped", cap=max_routes,
-                        candidates=len(ordered),
-                        consequence="competing_count is a floor, not a total")
+            log.warning(
+                "route_enumeration_capped",
+                cap=max_routes,
+                candidates=len(ordered),
+                consequence="competing_count is a floor, not a total",
+            )
             break
 
     # Drop routes that are a strict prefix of a longer one: they carry no
     # information the longer route does not.
     signatures = {tuple(s.read_id for s in r.sightings) for r in routes}
     routes = [
-        r for r in routes
+        r
+        for r in routes
         if not any(
             sig != tuple(s.read_id for s in r.sightings)
             and sig[: len(r.sightings)] == tuple(s.read_id for s in r.sightings)
@@ -306,8 +355,13 @@ async def persist(
                                 rarity_count, plate_anchored, min_trust)
             VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id
             """,
-            search_id, rank, score, competing, rarity_count,
-            route.plate_anchored, route.min_trust,
+            search_id,
+            rank,
+            score,
+            competing,
+            rarity_count,
+            route.plate_anchored,
+            route.min_trust,
         )
         route_ids.append(route_id)
 
@@ -319,9 +373,16 @@ async def persist(
                     drop_reason, gap_s)
                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
                 """,
-                route_id, leg.seq, leg.from_read_id, leg.to_read_id,
-                leg.distance_km, leg.elapsed_s, leg.required_speed_kmh,
-                leg.plausible, leg.drop_reason, leg.gap_s,
+                route_id,
+                leg.seq,
+                leg.from_read_id,
+                leg.to_read_id,
+                leg.distance_km,
+                leg.elapsed_s,
+                leg.required_speed_kmh,
+                leg.plausible,
+                leg.drop_reason,
+                leg.gap_s,
             )
 
     # Rejected legs hang off the top-ranked route, so the audit trail for a
@@ -334,8 +395,13 @@ async def persist(
                     distance_km, elapsed_s, required_speed_kmh, plausible, drop_reason)
                 VALUES ($1,$2,$3,$4,$5,$6,$7,false,$8)
                 """,
-                route_ids[0], -offset, leg.from_read_id, leg.to_read_id,
-                leg.distance_km, leg.elapsed_s, leg.required_speed_kmh,
+                route_ids[0],
+                -offset,
+                leg.from_read_id,
+                leg.to_read_id,
+                leg.distance_km,
+                leg.elapsed_s,
+                leg.required_speed_kmh,
                 leg.drop_reason,
             )
 

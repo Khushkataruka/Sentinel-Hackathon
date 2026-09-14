@@ -102,13 +102,13 @@ class BaseAdapter:
         self.config = config
         self.name = str(config.get("name", self.name))
 
-    def enumerate(self) -> list[CameraRef]:   # pragma: no cover - abstract
+    def enumerate(self) -> list[CameraRef]:  # pragma: no cover - abstract
         raise NotImplementedError
 
-    def open(self, camera_id: str) -> StreamHandle:   # pragma: no cover - abstract
+    def open(self, camera_id: str) -> StreamHandle:  # pragma: no cover - abstract
         raise NotImplementedError
 
-    def health(self, camera_id: str) -> HealthReport:   # pragma: no cover - abstract
+    def health(self, camera_id: str) -> HealthReport:  # pragma: no cover - abstract
         raise NotImplementedError
 
     def seek(self, camera_id: str, ts: datetime) -> StreamHandle:

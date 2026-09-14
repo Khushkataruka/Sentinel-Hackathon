@@ -48,8 +48,11 @@ class RtspAdapter(BaseAdapter):
                 lat=entry.get("lat"),
                 lon=entry.get("lon"),
                 codec=entry.get("codec"),
-                metadata={k: v for k, v in entry.items() if k not in
-                          {"camera_id", "name", "url", "lat", "lon", "codec"}},
+                metadata={
+                    k: v
+                    for k, v in entry.items()
+                    if k not in {"camera_id", "name", "url", "lat", "lon", "codec"}
+                },
             )
             self._cameras[ref.camera_id] = ref
         if not self._cameras:
@@ -63,7 +66,10 @@ class RtspAdapter(BaseAdapter):
         if ref is None:
             raise AdapterError(f"unknown camera {camera_id!r}")
         return StreamHandle(
-            camera_id=camera_id, url=ref.url, transport="tcp", codec=ref.codec,
+            camera_id=camera_id,
+            url=ref.url,
+            transport="tcp",
+            codec=ref.codec,
             options={"rtsp_transport": "tcp", "stimeout": "5000000"},
         )
 
@@ -84,7 +90,8 @@ class RtspAdapter(BaseAdapter):
         try:
             with socket.create_connection((host, port), timeout=self.timeout):
                 return HealthReport(
-                    reachable=True, last_frame_at=datetime.now(UTC),
+                    reachable=True,
+                    last_frame_at=datetime.now(UTC),
                     detail={"check": "tcp_connect", "port": port},
                 )
         except OSError as exc:

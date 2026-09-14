@@ -207,14 +207,19 @@ make the loader return your class, and nothing else in the platform changes.
 # ingest/detect.py
 class Detector(Protocol):
     model_id: int | None
+
     def __call__(self, image: np.ndarray) -> list[Detection]: ...
+
     # Detection(bbox=(x1,y1,x2,y2) in FRAME pixels, score: float, cls: str)
     # cls must be one of car, motorcycle, bus, truck, bicycle, person
+
 
 # pipelines/models/anpr.py
 class PlateReader(Protocol):
     is_stub: bool
+
     def __call__(self, crop: np.ndarray, top_k: int = 3) -> list[PlateRead]: ...
+
 
 # pipelines/models/reid.py       -> vector of settings.embedding_dim (512)
 # pipelines/models/captioner.py  -> caption text + parsed attribute fields

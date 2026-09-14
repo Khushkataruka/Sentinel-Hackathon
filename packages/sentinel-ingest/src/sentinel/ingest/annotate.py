@@ -43,16 +43,16 @@ log = get_logger(__name__)
 #: BGR, because OpenCV. Chosen to stay apart on a grey road and to survive
 #: the yuv420p round trip, which mangles saturated reds and blues.
 CLASS_COLOURS: dict[str, tuple[int, int, int]] = {
-    "car":        (255, 196,  64),
-    "motorcycle": ( 92, 220, 255),
-    "bus":        (140, 255, 160),
-    "truck":      (200, 160, 255),
-    "bicycle":    (180, 255, 255),
-    "auto":       ( 96, 208, 255),
-    "person":     (190, 190, 190),
+    "car": (255, 196, 64),
+    "motorcycle": (92, 220, 255),
+    "bus": (140, 255, 160),
+    "truck": (200, 160, 255),
+    "bicycle": (180, 255, 255),
+    "auto": (96, 208, 255),
+    "person": (190, 190, 190),
 }
 DEFAULT_COLOUR = (220, 220, 220)
-MATCH_COLOUR = (80, 120, 255)      # the one warm colour; a match is the point
+MATCH_COLOUR = (80, 120, 255)  # the one warm colour; a match is the point
 VIOLATION_COLOUR = (70, 70, 255)
 
 FONT = cv2.FONT_HERSHEY_SIMPLEX
@@ -105,11 +105,13 @@ def _adds_something(caption: str, attributes: str) -> bool:
     label is half wasted. A real captioner names the roof carrier, the dented
     panel, the missing bumper -- and passes.
     """
+
     def words(text: str) -> set[str]:
-        return {
-            "".join(ch for ch in token if ch.isalnum())
-            for token in text.lower().split()
-        } - _FILLER - {""}
+        return (
+            {"".join(ch for ch in token if ch.isalnum()) for token in text.lower().split()}
+            - _FILLER
+            - {""}
+        )
 
     return bool(words(caption) - words(attributes))
 
@@ -148,8 +150,11 @@ def describe_lines(row: Mapping[str, Any]) -> list[str]:
 
     caption = (row.get("caption") or "").strip()
     if caption and _adds_something(caption, lines[0] if lines else ""):
-        lines.append(caption if len(caption) <= CAPTION_CHARS
-                     else caption[: CAPTION_CHARS - 1].rstrip() + "…")
+        lines.append(
+            caption
+            if len(caption) <= CAPTION_CHARS
+            else caption[: CAPTION_CHARS - 1].rstrip() + "…"
+        )
 
     features = [str(f) for f in (row.get("features") or []) if f]
     unclaimed = [f for f in features if f.lower() not in caption.lower()]
@@ -158,9 +163,7 @@ def describe_lines(row: Mapping[str, Any]) -> list[str]:
 
     if row.get("plate_text"):
         conf = row.get("plate_conf")
-        lines.append(
-            str(row["plate_text"]) + (f"  {conf:.2f}" if conf is not None else "")
-        )
+        lines.append(str(row["plate_text"]) + (f"  {conf:.2f}" if conf is not None else ""))
 
     return lines
 
@@ -193,11 +196,13 @@ async def load_labels(camera_id: str) -> dict[str, Label]:
     for row in rows:
         record = dict(row)
         pending = [
-            name for name, status in (
+            name
+            for name, status in (
                 ("description", record["describe_status"]),
                 ("plate", record["plate_status"]),
                 ("violations", record["violation_status"]),
-            ) if status == "pending"
+            )
+            if status == "pending"
         ]
 
         labels[row["track_id"]] = Label(
@@ -253,15 +258,16 @@ def _block_size(
 
 def _overlaps(a: tuple[int, int, int, int], boxes: list[tuple[int, int, int, int]]) -> bool:
     ax1, ay1, ax2, ay2 = a
-    return any(
-        ax1 < bx2 and bx1 < ax2 and ay1 < by2 and by1 < ay2
-        for bx1, by1, bx2, by2 in boxes
-    )
+    return any(ax1 < bx2 and bx1 < ax2 and ay1 < by2 and by1 < ay2 for bx1, by1, bx2, by2 in boxes)
 
 
 def _text_block(
-    image: np.ndarray, origin: tuple[int, int], lines: list[tuple[str, tuple[int, int, int]]],
-    *, scale: float = 0.42, thickness: int = 1,
+    image: np.ndarray,
+    origin: tuple[int, int],
+    lines: list[tuple[str, tuple[int, int, int]]],
+    *,
+    scale: float = 0.42,
+    thickness: int = 1,
 ) -> None:
     """A readable label over arbitrary footage, growing upward from `origin`.
 
@@ -284,10 +290,11 @@ def _text_block(
         left = max(0, min(x, width - tw - 2 * pad - 1))
         top = y - th - base - pad
         if top < 0:
-            break                   # out of sky; the caller already tried below
+            break  # out of sky; the caller already tried below
         cv2.rectangle(image, (left, top), (left + tw + 2 * pad, y), (24, 24, 24), -1)
-        cv2.putText(image, text, (left + pad, y - base - 1), FONT, scale, colour,
-                    thickness, cv2.LINE_AA)
+        cv2.putText(
+            image, text, (left + pad, y - base - 1), FONT, scale, colour, thickness, cv2.LINE_AA
+        )
         y = top - 2
 
 
@@ -322,7 +329,9 @@ def label_lines(
 
 
 def draw_frame(
-    image: np.ndarray, boxes: list[dict[str, Any]], labels: dict[str, Label],
+    image: np.ndarray,
+    boxes: list[dict[str, Any]],
+    labels: dict[str, Label],
 ) -> int:
     """Draw one frame's boxes in place. Returns how many were drawn.
 
@@ -386,7 +395,12 @@ def draw_frame(
 
 
 def draw_hud(
-    image: np.ndarray, *, camera_id: str, when: str, index: int, total: int,
+    image: np.ndarray,
+    *,
+    camera_id: str,
+    when: str,
+    index: int,
+    total: int,
     stub_note: str | None,
 ) -> None:
     height = image.shape[0]
@@ -448,18 +462,39 @@ def _remux(src: Path, dst: Path) -> bool:
     if not ffmpeg:
         try:
             import imageio_ffmpeg
+
             ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
         except Exception:
             ffmpeg = None
     if not ffmpeg:
-        log.warning("ffmpeg_missing", action="leaving mp4v output as-is",
-                    hint="install ffmpeg for a browser-playable file")
+        log.warning(
+            "ffmpeg_missing",
+            action="leaving mp4v output as-is",
+            hint="install ffmpeg for a browser-playable file",
+        )
         return False
     result = subprocess.run(
-        [ffmpeg, "-y", "-loglevel", "error", "-i", str(src),
-         "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
-         "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(dst)],
-        capture_output=True, text=True,
+        [
+            ffmpeg,
+            "-y",
+            "-loglevel",
+            "error",
+            "-i",
+            str(src),
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "23",
+            "-pix_fmt",
+            "yuv420p",
+            "-movflags",
+            "+faststart",
+            str(dst),
+        ],
+        capture_output=True,
+        text=True,
     )
     if result.returncode != 0:
         log.warning("remux_failed", error=result.stderr.strip()[:300])
@@ -468,8 +503,12 @@ def _remux(src: Path, dst: Path) -> bool:
 
 
 async def render(
-    video: Path, sidecar: Path, out_path: Path,
-    *, correlations: dict[str, Any] | None = None, fps: float | None = None,
+    video: Path,
+    sidecar: Path,
+    out_path: Path,
+    *,
+    correlations: dict[str, Any] | None = None,
+    fps: float | None = None,
 ) -> dict[str, Any]:
     """Second pass: re-decode `video`, draw the sidecar, write `out_path`."""
     header, frames = read_sidecar(sidecar)
@@ -487,7 +526,8 @@ async def render(
     fps = fps or header.get("target_fps") or settings.target_decode_fps
     stream = CameraStream(
         StreamHandle(camera_id=camera_id, url=str(video), transport="file"),
-        target_fps=fps, once=True,
+        target_fps=fps,
+        once=True,
         fixed_epoch=None if start_at is None else _parse_dt(start_at),
     )
 
@@ -513,9 +553,12 @@ async def render(
                 matched_frames += 1
                 boxes_drawn += draw_frame(image, record["boxes"], labels)
             draw_hud(
-                image, camera_id=camera_id,
+                image,
+                camera_id=camera_id,
                 when=frame.seen_at.strftime("%Y-%m-%d %H:%M:%S"),
-                index=written + 1, total=total, stub_note=note,
+                index=written + 1,
+                total=total,
+                stub_note=note,
             )
             writer.write(image)
             written += 1
@@ -548,9 +591,13 @@ async def render(
         # The two passes disagreed about which frames to emit. Not fatal --
         # the video is still correct, just sparser than it should be -- but it
         # means something changed between the passes, most likely decode fps.
-        log.warning("sidecar_join_sparse", camera=camera_id,
-                    matched=matched_frames, expected=total,
-                    hint="was --fps the same for both passes?")
+        log.warning(
+            "sidecar_join_sparse",
+            camera=camera_id,
+            matched=matched_frames,
+            expected=total,
+            hint="was --fps the same for both passes?",
+        )
     log.info("annotated", **summary)
     return summary
 
@@ -561,8 +608,11 @@ def _parse_dt(value: str) -> datetime:
 
 
 def main(
-    videos: list[str], sidecar_dir: str, out_dir: str,
-    correlations_path: str | None, fps: float | None,
+    videos: list[str],
+    sidecar_dir: str,
+    out_dir: str,
+    correlations_path: str | None,
+    fps: float | None,
 ) -> int:
     """Entry point for `sentinel-ingest annotate`.
 
@@ -574,11 +624,13 @@ def main(
 
     correlations = (
         json.loads(Path(correlations_path).read_text(encoding="utf-8"))
-        if correlations_path and Path(correlations_path).exists() else None
+        if correlations_path and Path(correlations_path).exists()
+        else None
     )
     if correlations_path and correlations is None:
-        log.warning("correlations_missing", path=correlations_path,
-                    action="rendering without match tags")
+        log.warning(
+            "correlations_missing", path=correlations_path, action="rendering without match tags"
+        )
 
     async def _go() -> list[dict[str, Any]]:
         out: list[dict[str, Any]] = []
@@ -590,11 +642,15 @@ def main(
                     raise SystemExit(
                         f"no track sidecar at {sidecar}; run `sentinel-ingest offline` first"
                     )
-                out.append(await render(
-                    video, sidecar,
-                    Path(out_dir) / f"{video.stem}.annotated.mp4",
-                    correlations=correlations, fps=fps,
-                ))
+                out.append(
+                    await render(
+                        video,
+                        sidecar,
+                        Path(out_dir) / f"{video.stem}.annotated.mp4",
+                        correlations=correlations,
+                        fps=fps,
+                    )
+                )
         finally:
             await close_pool()
         return out
@@ -607,6 +663,15 @@ def main(
 
 
 __all__ = [
-    "Label", "describe_lines", "font_scale", "label_lines", "load_labels",
-    "apply_matches", "draw_frame", "draw_hud", "read_sidecar", "render", "main",
+    "Label",
+    "describe_lines",
+    "font_scale",
+    "label_lines",
+    "load_labels",
+    "apply_matches",
+    "draw_frame",
+    "draw_hud",
+    "read_sidecar",
+    "render",
+    "main",
 ]

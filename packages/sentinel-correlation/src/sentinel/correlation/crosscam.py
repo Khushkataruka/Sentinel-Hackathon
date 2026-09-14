@@ -73,7 +73,8 @@ async def seeds(
                   seen_at
          LIMIT $2
         """,
-        camera_ids, limit,
+        camera_ids,
+        limit,
     )
 
 
@@ -181,7 +182,10 @@ def dedupe(routes: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 async def correlate(
-    conn: asyncpg.Connection, camera_ids: list[str], *, max_seeds: int = DEFAULT_MAX_SEEDS,
+    conn: asyncpg.Connection,
+    camera_ids: list[str],
+    *,
+    max_seeds: int = DEFAULT_MAX_SEEDS,
 ) -> dict[str, Any]:
     """Search from every promising sighting; keep the cross-camera routes."""
     since, until = await window(conn, camera_ids)
@@ -190,8 +194,13 @@ async def correlate(
         return {"cameras": camera_ids, "seeds": 0, "matches": []}
 
     rows = await seeds(conn, camera_ids, max_seeds)
-    log.info("crosscam_start", cameras=len(camera_ids), seeds=len(rows),
-             since=since.isoformat(), until=until.isoformat())
+    log.info(
+        "crosscam_start",
+        cameras=len(camera_ids),
+        seeds=len(rows),
+        since=since.isoformat(),
+        until=until.isoformat(),
+    )
 
     found: list[dict[str, Any]] = []
     for row in rows:
@@ -202,12 +211,19 @@ async def correlate(
             # zero matches with no obvious cause.
             async with conn.transaction():
                 result = await search_mod.run(
-                    conn, _description(row), kind=SearchKind.DESCRIPTION,
-                    since=since, until=until, camera_ids=camera_ids,
+                    conn,
+                    _description(row),
+                    kind=SearchKind.DESCRIPTION,
+                    since=since,
+                    until=until,
+                    camera_ids=camera_ids,
                 )
         except Exception as exc:
-            log.error("seed_search_failed", read_id=str(row["read_id"]),
-                      error=f"{type(exc).__name__}: {exc}")
+            log.error(
+                "seed_search_failed",
+                read_id=str(row["read_id"]),
+                error=f"{type(exc).__name__}: {exc}",
+            )
             continue
         found.extend(
             {
@@ -226,25 +242,26 @@ async def correlate(
 
     matches: list[dict[str, Any]] = []
     for index, route in enumerate(ordered, start=1):
-        matches.append({
-            "match_id": f"MATCH-{index}",
-            "score": round(float(route["score"]), 4),
-            "competing_count": route["competing_count"],
-            "competing_count_capped": route["competing_count_capped"],
-            "plate_anchored": route["plate_anchored"],
-            "min_trust": route["min_trust"],
-            "rarity_count": route["rarity_count"],
-            "cameras": route["cameras"],
-            "route_id": route["route_id"],
-            "search_id": route["search_id"],
-            "seed_read_id": route["seed_read_id"],
-            "explain": route["explain"],
-            "legs": await _legs(conn, uuid.UUID(route["route_id"])),
-            "sightings": [
-                _public_sighting(detail.get(rid, {"read_id": rid}))
-                for rid in route["read_ids"]
-            ],
-        })
+        matches.append(
+            {
+                "match_id": f"MATCH-{index}",
+                "score": round(float(route["score"]), 4),
+                "competing_count": route["competing_count"],
+                "competing_count_capped": route["competing_count_capped"],
+                "plate_anchored": route["plate_anchored"],
+                "min_trust": route["min_trust"],
+                "rarity_count": route["rarity_count"],
+                "cameras": route["cameras"],
+                "route_id": route["route_id"],
+                "search_id": route["search_id"],
+                "seed_read_id": route["seed_read_id"],
+                "explain": route["explain"],
+                "legs": await _legs(conn, uuid.UUID(route["route_id"])),
+                "sightings": [
+                    _public_sighting(detail.get(rid, {"read_id": rid})) for rid in route["read_ids"]
+                ],
+            }
+        )
 
     log.info("crosscam_done", seeds=len(rows), matches=len(matches))
     return {
@@ -302,20 +319,27 @@ def render_html(report: dict[str, Any]) -> str:
         crops = []
         for sighting in match["sightings"]:
             thumb = _thumb(sighting.get("crop_ref"))
-            caption = " · ".join(
-                p for p in (sighting.get("colour"), sighting.get("vtype") or sighting.get("class"),
-                            sighting.get("plate_text")) if p
-            ) or "—"
+            caption = (
+                " · ".join(
+                    p
+                    for p in (
+                        sighting.get("colour"),
+                        sighting.get("vtype") or sighting.get("class"),
+                        sighting.get("plate_text"),
+                    )
+                    if p
+                )
+                or "—"
+            )
             picture = (
-                f'<img src="{thumb}" alt="">' if thumb
-                else '<span class="nocrop">no crop</span>'
+                f'<img src="{thumb}" alt="">' if thumb else '<span class="nocrop">no crop</span>'
             )
             cam = e(str(sighting.get("camera_id")))
             clock = e(str(sighting.get("seen_at") or "")[11:19])
             crops.append(
                 f'<figure><div class="thumb">{picture}</div>'
-                f'<figcaption><b>{cam}</b><br>{clock}<br>'
-                f'{e(caption)}</figcaption></figure>'
+                f"<figcaption><b>{cam}</b><br>{clock}<br>"
+                f"{e(caption)}</figcaption></figure>"
             )
 
         legs = "".join(
@@ -326,31 +350,35 @@ def render_html(report: dict[str, Any]) -> str:
             for leg in match["legs"]
         )
 
-        badges = [f'score {match["score"]:.3f}', f'{match["competing_count"]} competing']
+        badges = [f"score {match['score']:.3f}", f"{match['competing_count']} competing"]
         if match["competing_count_capped"]:
             badges.append("count capped — a floor, not a total")
         if match["plate_anchored"]:
             badges.append("plate anchored")
         if match.get("rarity_count") is not None:
-            badges.append(f'population {match["rarity_count"]}')
+            badges.append(f"population {match['rarity_count']}")
         if match.get("min_trust") is not None:
-            badges.append(f'min trust {match["min_trust"]:.2f}')
+            badges.append(f"min trust {match['min_trust']:.2f}")
 
         cards.append(f"""
     <section class="card">
       <h2>{e(match["match_id"])} <small>{e(" → ".join(match["cameras"]))}</small></h2>
-      <p class="badges">{"".join(f'<span>{e(b)}</span>' for b in badges)}</p>
+      <p class="badges">{"".join(f"<span>{e(b)}</span>" for b in badges)}</p>
       <div class="crops">{"".join(crops)}</div>
       <table><thead><tr><th>leg</th><th>distance</th><th>elapsed</th>
         <th>required speed</th><th>plausible</th><th>uncovered</th></tr></thead>
         <tbody>{legs}</tbody></table>
     </section>""")
 
-    empty = "" if matches else (
-        '<p class="empty">No route visited more than one camera. Either nothing '
-        'in these videos appeared twice, or the appearance model is a stub and '
-        'cannot tell two vehicles apart. Check the run summary for which models '
-        'were real.</p>'
+    empty = (
+        ""
+        if matches
+        else (
+            '<p class="empty">No route visited more than one camera. Either nothing '
+            "in these videos appeared twice, or the appearance model is a stub and "
+            "cannot tell two vehicles apart. Check the run summary for which models "
+            "were real.</p>"
+        )
     )
 
     return f"""<!doctype html>
@@ -405,7 +433,10 @@ def render_html(report: dict[str, Any]) -> str:
 
 
 def main(
-    camera_ids: list[str], out: str, *, max_seeds: int = DEFAULT_MAX_SEEDS,
+    camera_ids: list[str],
+    out: str,
+    *,
+    max_seeds: int = DEFAULT_MAX_SEEDS,
     html_out: str | None = None,
 ) -> int:
     from sentinel.core.db import close_pool, transaction
@@ -426,14 +457,25 @@ def main(
         Path(html_out).parent.mkdir(parents=True, exist_ok=True)
         Path(html_out).write_text(render_html(report), encoding="utf-8")
 
-    print(json.dumps(
-        {"matches": len(report["matches"]), "seeds": report["seeds"],
-         "json": str(out_path), "html": html_out},
-        indent=2,
-    ))
+    print(
+        json.dumps(
+            {
+                "matches": len(report["matches"]),
+                "seeds": report["seeds"],
+                "json": str(out_path),
+                "html": html_out,
+            },
+            indent=2,
+        )
+    )
     return 0
 
 
 __all__ = [
-    "seeds", "dedupe", "correlate", "render_html", "main", "DEFAULT_MAX_SEEDS",
+    "seeds",
+    "dedupe",
+    "correlate",
+    "render_html",
+    "main",
+    "DEFAULT_MAX_SEEDS",
 ]

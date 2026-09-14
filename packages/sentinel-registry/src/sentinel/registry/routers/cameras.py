@@ -33,8 +33,12 @@ async def list_cameras(
 
     near = (lat, lon, radius_m) if lat is not None and lon is not None else None
     cameras = await repo.list_cameras(
-        conn, department_id=department_id, enabled=enabled, near=near,
-        limit=limit, offset=offset,
+        conn,
+        department_id=department_id,
+        enabled=enabled,
+        near=near,
+        limit=limit,
+        offset=offset,
     )
     return [c for c in cameras if c.department_id in visible]
 
@@ -62,8 +66,12 @@ async def upsert_camera(camera_id: str, body: CameraIn, conn: DbTxn, user: Admin
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "camera_id mismatch")
     cam = await repo.upsert_camera(conn, body)
     await audit.write(
-        conn, actor_kind=ActorKind.USER, actor_id=user.id, action="camera.upsert",
-        object_type="camera", object_id=camera_id,
+        conn,
+        actor_kind=ActorKind.USER,
+        actor_id=user.id,
+        action="camera.upsert",
+        object_type="camera",
+        object_id=camera_id,
         details={"department_id": body.department_id, "kind": body.kind.value},
     )
     return cam
@@ -74,7 +82,10 @@ async def enable_camera(camera_id: str, conn: DbTxn, user: Admin, enabled: bool 
     if not await repo.set_camera_enabled(conn, camera_id, enabled):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no such camera")
     await audit.write(
-        conn, actor_kind=ActorKind.USER, actor_id=user.id,
+        conn,
+        actor_kind=ActorKind.USER,
+        actor_id=user.id,
         action="camera.enable" if enabled else "camera.disable",
-        object_type="camera", object_id=camera_id,
+        object_type="camera",
+        object_id=camera_id,
     )

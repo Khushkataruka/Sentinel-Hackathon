@@ -1,191 +1,131 @@
-import React, { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Hls from 'hls.js'
+import './operator-components.css'
 
 export default function VideoPlayer({ cameraId, title }) {
   const videoRef = useRef(null)
-  const hlsRef = useRef(null)
-  const [loading, setLoading] = useState(true)
+  const [status, setStatus] = useState('loading')
   const [error, setError] = useState(null)
-
-  const streamUrl = `/stream/${cameraId}/index.m3u8`
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
-    let videoEl = videoRef.current
-    if (!videoEl || !cameraId) return
-
-    setLoading(true)
+    const video = videoRef.current
+    if (!video || !cameraId) return
+    let active = true
+    let hls
+    let recovered = false
+    setStatus('loading')
     setError(null)
+    const streamUrl = `/stream/${encodeURIComponent(cameraId)}/index.m3u8`
+    const fail = (message) => {
+      if (!active) return
+      clearTimeout(timeout)
+      setError(message)
+      setStatus('error')
+      hls?.destroy()
+    }
+    const ready = () => {
+      if (!active) return
+      clearTimeout(timeout)
+      setStatus('ready')
+      setError(null)
+      video.play().catch(() => {})
+    }
+    const playing = () => {
+      if (active) setStatus('playing')
+    }
+    const paused = () => {
+      if (active) setStatus('paused')
+    }
+    const playbackError = () => fail('This camera feed is unavailable.')
+    const timeout = setTimeout(() => fail('The camera did not respond. Try reconnecting.'), 20000)
+    video.addEventListener('canplay', ready)
+    video.addEventListener('playing', playing)
+    video.addEventListener('pause', paused)
+    video.addEventListener('error', playbackError)
 
     if (Hls.isSupported()) {
-      if (hlsRef.current) {
-        hlsRef.current.destroy()
-      }
-
-      const hls = new Hls({
+      hls = new Hls({
         enableWorker: true,
         lowLatencyMode: true,
         backBufferLength: 30,
       })
-
-      hlsRef.current = hls
-
       hls.loadSource(streamUrl)
-      hls.attachMedia(videoEl)
-
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        setLoading(false)
-        videoEl.play().catch((err) => {
-          console.warn('Autoplay prevented or interrupted:', err)
-        })
+      hls.attachMedia(video)
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (!data.fatal) return
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR && !recovered) {
+          recovered = true
+          hls.recoverMediaError()
+        } else fail('This camera feed is unavailable.')
       })
-
-      hls.on(Hls.Events.ERROR, (event, data) => {
-        if (data.fatal) {
-          switch (data.type) {
-            case Hls.ErrorTypes.NETWORK_ERROR:
-              console.error('Fatal network error encountered, trying to recover...')
-              hls.startLoad()
-              break
-            case Hls.ErrorTypes.MEDIA_ERROR:
-              console.error('Fatal media error encountered, trying to recover...')
-              hls.recoverMediaError()
-              break
-            default:
-              console.error('Fatal unrecoverable HLS error:', data)
-              setError('Failed to load video stream')
-              hls.destroy()
-              break
-          }
-        }
-      })
-    } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
-      // Native HLS support (Safari)
-      videoEl.src = streamUrl
-      videoEl.addEventListener('loadedmetadata', () => {
-        setLoading(false)
-        videoEl.play().catch(() => {})
-      })
-      videoEl.addEventListener('error', () => {
-        setError('Video playback error')
-        setLoading(false)
-      })
-    } else {
-      setError('HLS is not supported in your browser')
-      setLoading(false)
-    }
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = streamUrl
+    } else fail('Streaming is not supported by this browser.')
 
     return () => {
-      if (hlsRef.current) {
-        hlsRef.current.destroy()
-        hlsRef.current = null
-      }
+      active = false
+      clearTimeout(timeout)
+      video.removeEventListener('canplay', ready)
+      video.removeEventListener('playing', playing)
+      video.removeEventListener('pause', paused)
+      video.removeEventListener('error', playbackError)
+      hls?.destroy()
+      video.removeAttribute('src')
+      video.load()
     }
-  }, [cameraId, streamUrl])
+  }, [cameraId, attempt])
 
+  const label = {
+    loading: 'CONNECTING',
+    error: 'UNAVAILABLE',
+    ready: 'READY',
+    playing: 'PLAYING',
+    paused: 'PAUSED',
+  }[status]
   return (
-    <div style={{ width: '280px', fontFamily: 'sans-serif' }}>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: '6px',
-        }}
-      >
-        <span style={{ fontWeight: 'bold', fontSize: '13px', color: '#1e293b' }}>
-          {title || cameraId}
-        </span>
-        <span
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '4px',
-            background: '#ef444420',
-            color: '#ef4444',
-            padding: '2px 6px',
-            borderRadius: '4px',
-            fontSize: '11px',
-            fontWeight: '600',
-          }}
-        >
-          <span
-            style={{
-              width: '6px',
-              height: '6px',
-              borderRadius: '50%',
-              backgroundColor: '#ef4444',
-              display: 'inline-block',
-            }}
-          />
-          LIVE
+    <div className="sentinel-player">
+      <div className="player-header">
+        <strong>{title || cameraId}</strong>
+        <span className={`player-status ${status === 'playing' ? 'is-live' : ''}`}>
+          <i aria-hidden="true" />
+          {label}
         </span>
       </div>
-
-      <div
-        style={{
-          position: 'relative',
-          width: '100%',
-          height: '158px',
-          backgroundColor: '#0f172a',
-          borderRadius: '6px',
-          overflow: 'hidden',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        {loading && (
-          <div
-            style={{
-              position: 'absolute',
-              color: '#94a3b8',
-              fontSize: '12px',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: '6px',
-            }}
-          >
-            <div
-              style={{
-                width: '18px',
-                height: '18px',
-                border: '2px solid #38bdf8',
-                borderTopColor: 'transparent',
-                borderRadius: '50%',
-                animation: 'spin 1s linear infinite',
-              }}
-            />
-            Loading feed...
+      <div className="player-stage">
+        <video
+          ref={videoRef}
+          muted
+          playsInline
+          controls
+          aria-label={`${title || cameraId} camera feed`}
+        />
+        {status === 'loading' && (
+          <div className="player-overlay" role="status">
+            <div className="player-spinner" aria-hidden="true" />
+            <p>Establishing video connection</p>
           </div>
         )}
-
-        {error ? (
-          <div style={{ color: '#f87171', fontSize: '12px', padding: '8px', textAlign: 'center' }}>
-            {error}
+        {error && (
+          <div className="player-overlay" role="status">
+            <svg
+              width="25"
+              height="25"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              aria-hidden="true"
+            >
+              <path d="M4 7h11v10H4zM15 10l5-3v10l-5-3M3 3l18 18" />
+            </svg>
+            <p>{error}</p>
+            <button type="button" onClick={() => setAttempt((value) => value + 1)}>
+              Reconnect feed ↻
+            </button>
           </div>
-        ) : (
-          <video
-            ref={videoRef}
-            muted
-            playsInline
-            controls
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              display: loading ? 'none' : 'block',
-            }}
-          />
         )}
       </div>
-
-      <style>{`
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-      `}</style>
     </div>
   )
 }

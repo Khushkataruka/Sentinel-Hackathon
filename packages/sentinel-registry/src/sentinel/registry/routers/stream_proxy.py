@@ -51,7 +51,10 @@ async def _ensure_login(client: httpx.AsyncClient) -> bool:
         if res.status_code in (200, 302, 303):
             if "sentinel" in res.cookies:
                 _active_cookies["sentinel"] = res.cookies["sentinel"]
-                log.info("stream_proxy_login_success", cookie_len=len(_active_cookies.get("sentinel", "")))
+                log.info(
+                    "stream_proxy_login_success",
+                    cookie_len=len(_active_cookies.get("sentinel", "")),
+                )
                 return True
             # Also check Set-Cookie header if not parsed into res.cookies
             set_cookie = res.headers.get("set-cookie", "")
@@ -69,15 +72,21 @@ async def _ensure_login(client: httpx.AsyncClient) -> bool:
 async def _proxy_fetch(client: httpx.AsyncClient, target_url: str) -> httpx.Response:
     cookies = _get_cookies()
     headers = {**BROWSER_HEADERS, **gridauth.session_headers()}
-    
+
     res = await client.get(target_url, headers=headers, cookies=cookies, follow_redirects=True)
-    
+
     # If unauthenticated or redirected to HTML sign-in page
-    if res.status_code in (401, 403) or "json" in res.headers.get("content-type", "") or "<html" in res.text.lower()[:200]:
+    if (
+        res.status_code in (401, 403)
+        or "json" in res.headers.get("content-type", "")
+        or "<html" in res.text.lower()[:200]
+    ):
         if await _ensure_login(client):
             cookies = _get_cookies()
-            res = await client.get(target_url, headers=headers, cookies=cookies, follow_redirects=True)
-            
+            res = await client.get(
+                target_url, headers=headers, cookies=cookies, follow_redirects=True
+            )
+
     return res
 
 
@@ -88,11 +97,13 @@ async def get_encryption_key(camera_id: str = ""):
     async with httpx.AsyncClient(timeout=10.0) as client:
         res = await _proxy_fetch(client, target_url)
         if res.status_code != 200:
-            raise HTTPException(status_code=res.status_code, detail="Failed to fetch encryption key")
+            raise HTTPException(
+                status_code=res.status_code, detail="Failed to fetch encryption key"
+            )
         return Response(
             content=res.content,
             media_type="application/octet-stream",
-            headers={"Access-Control-Allow-Origin": "*"}
+            headers={"Access-Control-Allow-Origin": "*"},
         )
 
 
@@ -102,23 +113,21 @@ async def get_manifest(camera_id: str):
     async with httpx.AsyncClient(timeout=10.0) as client:
         res = await _proxy_fetch(client, target_url)
         if res.status_code != 200:
-            raise HTTPException(status_code=res.status_code, detail=f"Failed to fetch stream manifest for {camera_id}")
-        
+            raise HTTPException(
+                status_code=res.status_code,
+                detail=f"Failed to fetch stream manifest for {camera_id}",
+            )
+
         content = res.text
         # Rewrite URI="/enc.key" or URI="enc.key" to URI="/stream/{camera_id}/enc.key"
         content = re.sub(
-            r'URI=["\']?/?enc\.key["\']?',
-            f'URI="/stream/{camera_id}/enc.key"',
-            content
+            r'URI=["\']?/?enc\.key["\']?', f'URI="/stream/{camera_id}/enc.key"', content
         )
-        
+
         return Response(
             content=content,
             media_type="application/vnd.apple.mpegurl",
-            headers={
-                "Access-Control-Allow-Origin": "*",
-                "Cache-Control": "no-cache"
-            }
+            headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache"},
         )
 
 
@@ -126,19 +135,22 @@ async def get_manifest(camera_id: str):
 async def get_segment(camera_id: str, path: str):
     if path == "enc.key":
         return await get_encryption_key(camera_id)
-        
+
     target_url = f"{_get_base_url()}/{camera_id}/{path}"
     async with httpx.AsyncClient(timeout=10.0) as client:
         res = await _proxy_fetch(client, target_url)
         if res.status_code != 200:
-            raise HTTPException(status_code=res.status_code, detail=f"Failed to fetch segment {path}")
-        
-        media_type = "video/mp2t" if path.endswith(".ts") else res.headers.get("content-type", "application/octet-stream")
+            raise HTTPException(
+                status_code=res.status_code, detail=f"Failed to fetch segment {path}"
+            )
+
+        media_type = (
+            "video/mp2t"
+            if path.endswith(".ts")
+            else res.headers.get("content-type", "application/octet-stream")
+        )
         return Response(
             content=res.content,
             media_type=media_type,
-            headers={
-                "Access-Control-Allow-Origin": "*",
-                "Cache-Control": "public, max-age=3600"
-            }
+            headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "public, max-age=3600"},
         )

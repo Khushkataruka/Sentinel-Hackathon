@@ -34,8 +34,12 @@ async def import_cameras(
 
     result = await importer.import_rows(conn, rows, default_department_id)
     await audit.write(
-        conn, actor_kind=ActorKind.USER, actor_id=user.id, action="camera.bulk_import",
-        object_type="import", object_id=file.filename or "upload",
+        conn,
+        actor_kind=ActorKind.USER,
+        actor_id=user.id,
+        action="camera.bulk_import",
+        object_type="import",
+        object_id=file.filename or "upload",
         details={"accepted": result.accepted, "rejected": len(result.rejected)},
     )
     return result.as_dict()
@@ -48,9 +52,7 @@ async def sync_sentinel(
     department_id: int = Query(..., description="department the grid cameras belong to"),
     base_url: str | None = Query(None, description="overrides SENTINEL_SENTINEL_BASE_URL"),
     adapter_id: int | None = Query(None, description="adapter row to record stream URLs on"),
-    coordinate_file: str | None = Query(
-        None, description="overrides SENTINEL_COORDINATE_FILE"
-    ),
+    coordinate_file: str | None = Query(None, description="overrides SENTINEL_COORDINATE_FILE"),
 ):
     """Pull the sandbox catalogue and upsert its cameras.
 
@@ -72,16 +74,26 @@ async def sync_sentinel(
     """
     try:
         report = await catalogue.sync(
-            conn, department_id=department_id, base_url=base_url,
-            adapter_id=adapter_id, coordinate_file=coordinate_file,
+            conn,
+            department_id=department_id,
+            base_url=base_url,
+            adapter_id=adapter_id,
+            coordinate_file=coordinate_file,
         )
     except Exception as exc:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"catalogue unreachable: {exc}") from exc
 
     await audit.write(
-        conn, actor_kind=ActorKind.USER, actor_id=user.id, action="catalogue.sync",
-        object_type="department", object_id=str(department_id),
-        details={"synced": report["count"], "skipped": len(report["skipped"]),
-                 "position_quality": report["position_quality"]},
+        conn,
+        actor_kind=ActorKind.USER,
+        actor_id=user.id,
+        action="catalogue.sync",
+        object_type="department",
+        object_id=str(department_id),
+        details={
+            "synced": report["count"],
+            "skipped": len(report["skipped"]),
+            "position_quality": report["position_quality"],
+        },
     )
     return report

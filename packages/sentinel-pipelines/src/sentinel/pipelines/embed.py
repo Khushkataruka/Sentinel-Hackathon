@@ -26,13 +26,14 @@ class EmbedWorker(PipelineWorker):
     async def setup(self) -> None:
         self.encoder = reid_models.load_reid()
 
-    async def process(
-        self, conn, job: queue.Job, crop: np.ndarray
-    ) -> dict[str, Any] | None:
-        resolution_class = await conn.fetchval(
-            "SELECT resolution_class FROM camera_profiles WHERE camera_id = $1",
-            job.camera_id,
-        ) or "thumbnail"
+    async def process(self, conn, job: queue.Job, crop: np.ndarray) -> dict[str, Any] | None:
+        resolution_class = (
+            await conn.fetchval(
+                "SELECT resolution_class FROM camera_profiles WHERE camera_id = $1",
+                job.camera_id,
+            )
+            or "thumbnail"
+        )
 
         if not reid_models.usable(crop, resolution_class):
             # Not a failure: this camera cannot produce a usable appearance
@@ -40,8 +41,7 @@ class EmbedWorker(PipelineWorker):
             # stops waiting, and leave the column null so the partial HNSW
             # index never sees it.
             await self._set_status(conn, job.read_id, PipelineStatus.SKIPPED)
-            return {"skipped": "crop below usable size",
-                    "resolution_class": resolution_class}
+            return {"skipped": "crop below usable size", "resolution_class": resolution_class}
 
         vector = self.encoder(crop)
         await conn.execute(
@@ -49,6 +49,8 @@ class EmbedWorker(PipelineWorker):
             UPDATE sightings SET embedding = $2::vector, embed_model_id = $3
              WHERE read_id = $1
             """,
-            job.read_id, encode_vector(vector), self.model_id,
+            job.read_id,
+            encode_vector(vector),
+            self.model_id,
         )
         return {"dim": len(vector)}
