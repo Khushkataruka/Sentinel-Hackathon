@@ -35,10 +35,9 @@ export default function SightingsPage() {
         {sightings.map((s) => (
           <div className="sighting-card" key={s.read_id}>
             <img 
-              src={api.mediaUrl('crops', s.read_id + '.jpg')} 
+              src={api.mediaUrl(s.crop_ref)}
               alt="Vehicle crop" 
               className="sighting-image"
-              onError={(e) => { e.target.style.display = 'none' }}
             />
             <div className="sighting-info">
               <div className="sighting-title">

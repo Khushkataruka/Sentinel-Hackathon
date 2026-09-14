@@ -73,10 +73,9 @@ export default function RoutePage() {
             {uniqueSightings.map(s => (
               <div key={s.read_id} style={{ textAlign: 'center', minWidth: '150px' }}>
                 <img 
-                  src={`/media/${s.crop_ref}`} 
+                  src={api.mediaUrl(s.crop_ref)}
                   alt={`Sighting at ${s.camera}`} 
                   style={{ maxHeight: '150px', border: '1px solid #ccc', borderRadius: '4px', objectFit: 'contain' }} 
-                  onError={(e) => { e.target.style.display = 'none'; }}
                 />
                 <div className="muted" style={{ fontSize: '0.8em', marginTop: '4px' }}>{s.camera}</div>
               </div>
