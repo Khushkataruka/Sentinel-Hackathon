@@ -49,6 +49,7 @@ of optics and pole geometry -- so these are asserted, not established.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 from pathlib import Path
@@ -181,11 +182,20 @@ async def fetch_catalogue(base_url: str | None = None) -> list[dict[str, Any]]:
     async with httpx.AsyncClient(
         timeout=settings.sentinel_http_timeout,
         follow_redirects=True,
-        headers=gridauth.session_headers(),
-        cookies=gridauth.session_cookies(),
     ) as client:
+
+        async def get(url: str, cookies: dict[str, str]) -> httpx.Response:
+            return await client.get(url, headers=gridauth.session_headers(), cookies=cookies)
+
         for url in urls:
-            response = await client.get(url)
+            cookies = gridauth.session_cookies()
+            response = await get(url, cookies)
+            # Signed out: the pasted session expired, or another process
+            # sharing the account logged in and replaced ours.
+            if gridauth.signed_out(response) and await asyncio.to_thread(
+                gridauth.login, base_url or settings.sentinel_base_url, cookies
+            ):
+                response = await get(url, gridauth.session_cookies())
             if response.status_code == 404 and url != urls[-1]:
                 tried.append(f"{url}: 404")
                 continue

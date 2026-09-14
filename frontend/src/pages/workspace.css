@@ -805,12 +805,15 @@ a.search-result-card .src-route {
 }
 
 /* Watchlist */
-.watchlist-panel {
+.watchlist-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
   margin-top: 16px;
 }
 
 .watchlist-message {
-  margin: 0 20px 14px;
+  margin: 0;
   padding: 12px 14px;
   border-left: 2px solid var(--signal);
   background: rgba(183, 255, 69, 0.055);
@@ -821,10 +824,6 @@ a.search-result-card .src-route {
 .watchlist-message.is-error {
   border-left-color: #ff6b6b;
   background: rgba(255, 107, 107, 0.07);
-}
-
-.watchlist-list {
-  padding: 0 20px 20px;
 }
 
 .src-image-wrap {

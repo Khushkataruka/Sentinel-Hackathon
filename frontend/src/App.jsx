@@ -8,6 +8,7 @@ import ViolationsPage from './pages/ViolationsPage.jsx'
 import TrafficPage from './pages/TrafficPage.jsx'
 import AdminPage from './pages/AdminPage.jsx'
 import SightingsPage from './pages/SightingsPage.jsx'
+import WatchlistPage from './pages/WatchlistPage.jsx'
 import Icon from './components/Icon.jsx'
 
 const NAVIGATION = [
@@ -17,6 +18,7 @@ const NAVIGATION = [
       { to: '/map', label: 'Command map', icon: 'map' },
       { to: '/sightings', label: 'Live sightings', icon: 'scan' },
       { to: '/alerts', label: 'Alert queue', icon: 'alert' },
+      { to: '/watchlist', label: 'Watchlist', icon: 'target' },
     ],
   },
   {
@@ -175,6 +177,7 @@ export default function App() {
             <Route path="/search" element={<SearchPage />} />
             <Route path="/routes/:routeId" element={<RoutePage />} />
             <Route path="/alerts" element={<AlertsPage />} />
+            <Route path="/watchlist" element={<WatchlistPage />} />
             <Route path="/violations" element={<ViolationsPage />} />
             <Route path="/traffic" element={<TrafficPage />} />
             <Route path="/admin" element={<AdminPage />} />

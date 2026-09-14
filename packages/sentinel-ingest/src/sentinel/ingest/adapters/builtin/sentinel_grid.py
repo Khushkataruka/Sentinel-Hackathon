@@ -88,24 +88,39 @@ class SentinelGridAdapter(BaseAdapter):
         the content type is checked and the missing credential is named.
         """
         errors: list[str] = []
+
+        def get(url: str, cookies: dict[str, str]) -> httpx.Response:
+            return httpx.get(
+                url,
+                timeout=self.timeout,
+                follow_redirects=True,
+                headers=gridauth.session_headers(),
+                cookies=cookies,
+            )
+
+        def is_json(response: httpx.Response) -> bool:
+            return "json" in response.headers.get("content-type", "").lower()
+
         for url in settings.sentinel_catalogue_urls(self.base_url):
             try:
-                response = httpx.get(
-                    url,
-                    timeout=self.timeout,
-                    follow_redirects=True,
-                    headers=gridauth.session_headers(),
-                    cookies=gridauth.session_cookies(),
-                )
+                cookies = gridauth.session_cookies()
+                response = get(url, cookies)
+                # Signed out: the pasted session expired, or another process
+                # sharing the account logged in and replaced ours. Log in and
+                # ask again.
+                if gridauth.signed_out(response) and gridauth.login(
+                    self.base_url, rejected=cookies
+                ):
+                    response = get(url, gridauth.session_cookies())
                 if response.status_code == 404:
                     errors.append(f"{url}: 404")
                     continue
                 response.raise_for_status()
-                if "json" not in response.headers.get("content-type", "").lower():
+                if not is_json(response):
                     raise AdapterError(
                         f"{url} answered HTML, not JSON -- the catalogue needs a "
-                        "session. Set SENTINEL_SENTINEL_COOKIE or "
-                        "SENTINEL_SENTINEL_TOKEN."
+                        "session. Set SENTINEL_GRID_EMAIL and SENTINEL_GRID_PASSWORD, "
+                        "or paste one into SENTINEL_SENTINEL_COOKIE / SENTINEL_SENTINEL_TOKEN."
                     )
                 return response.json()
             except AdapterError:
