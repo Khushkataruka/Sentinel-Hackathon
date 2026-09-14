@@ -938,3 +938,10 @@ a.search-result-card .src-route {
     grid-template-columns: 1fr;
   }
 }
+
+.error-cell {
+  max-width: 250px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

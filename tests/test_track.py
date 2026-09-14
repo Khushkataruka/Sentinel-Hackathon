@@ -204,6 +204,45 @@ def test_an_empty_frame_does_not_read_as_a_cut_on_its_own():
     assert not tracker.suspects_scene_cut()
 
 
+def test_two_vehicles_lost_together_is_not_a_scene_cut():
+    """Measured on a live feed at ~2 fps: two tracks losing association in
+    the same frame is ordinary traffic. Read as a loop point it flushed the
+    tracker every few seconds, and every vehicle still on screen came back as
+    a second sighting."""
+    tracker = ByteTrack()
+    for step in range(8):
+        tracker.update(
+            [
+                det(100 + step * 12, 200, 180 + step * 12, 260),
+                det(300 + step * 12, 300, 380 + step * 12, 360),
+            ],
+            0.1,
+            step * 0.1,
+        )
+    tracker.update([det(20, 400, 100, 450)], 0.1, 0.8)
+    assert not tracker.suspects_scene_cut()
+
+
+def test_most_but_not_all_vehicles_lost_is_not_a_scene_cut():
+    """A loop point replaces every vehicle. One still matching means the
+    scene did not change."""
+    tracker = ByteTrack()
+    for step in range(8):
+        tracker.update(
+            [
+                det(100 + step * 12, 200, 180 + step * 12, 260),
+                det(300 + step * 12, 300, 380 + step * 12, 360),
+                det(500 - step * 12, 100, 580 - step * 12, 160),
+                det(700 - step * 12, 500, 780 - step * 12, 560),
+            ],
+            0.1,
+            step * 0.1,
+        )
+    # Three vanish; the first carries on where it was heading.
+    tracker.update([det(196, 200, 276, 260), det(20, 30, 90, 80)], 0.1, 0.8)
+    assert not tracker.suspects_scene_cut()
+
+
 def test_track_ids_keep_climbing_across_a_reset():
     """Within one process, ids are not reused after a scene cut.
 

@@ -110,6 +110,9 @@ class Settings(BaseSettings):
     # -- ingest ------------------------------------------------------------
     target_decode_fps: float = 10.0  # tracking needs 8-12; the archive needs 1
     archive_fps: float = 1.0
+    #: Stream only the first N cameras by id; unset means all. The grid meters
+    #: watch time per account, and every camera at once spent it.
+    ingest_max_cameras: int | None = Field(None, ge=1)
 
     # Delayed annotated playback. The shared media volume holds a bounded
     # JPEG ring per ingest worker; offline runs do not publish to it.

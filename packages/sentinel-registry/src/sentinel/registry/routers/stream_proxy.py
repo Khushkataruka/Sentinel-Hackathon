@@ -20,12 +20,23 @@ def _get_base_url() -> str:
 
 async def _proxy_fetch(client: httpx.AsyncClient, target_url: str) -> httpx.Response:
     async def get(cookies: dict[str, str]) -> httpx.Response:
-        return await client.get(
-            target_url,
-            headers={**gridauth.BROWSER_HEADERS, **gridauth.session_headers()},
-            cookies=cookies,
-            follow_redirects=True,
-        )
+        try:
+            return await client.get(
+                target_url,
+                headers={**gridauth.BROWSER_HEADERS, **gridauth.session_headers()},
+                cookies=cookies,
+                follow_redirects=True,
+            )
+        except httpx.TimeoutException as exc:
+            # The grid regularly outlasts the client timeout. Unhandled, that
+            # reached the player as a bare 500 from this service.
+            raise HTTPException(
+                status.HTTP_504_GATEWAY_TIMEOUT, "the grid did not answer in time"
+            ) from exc
+        except httpx.HTTPError as exc:
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY, f"the grid could not be reached ({type(exc).__name__})"
+            ) from exc
 
     cookies = gridauth.session_cookies()
     res = await get(cookies)

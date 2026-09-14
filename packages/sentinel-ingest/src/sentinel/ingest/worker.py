@@ -16,6 +16,7 @@ import time
 import uuid
 from collections import OrderedDict
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -90,6 +91,11 @@ class CameraWorker:
             LivePublisher(camera_id) if not once and settings.annotated_feed_enabled else None
         )
         self._last_publish_error = 0.0
+        #: This camera's frame reads, on a thread of their own. A read blocks
+        #: -- an RTSP open waits out its timeout, a dead feed sleeps through
+        #: reconnect backoff -- and on the shared executor one stuck camera per
+        #: thread left detection nowhere to run. Threads start on first use.
+        self._reader = ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"read-{camera_id}")
 
         self.gating: writer.Gating | None = None
         self.tracker: ByteTrack | None = None
@@ -359,7 +365,7 @@ class CameraWorker:
         try:
             while not self._stopping:
                 # next() on a blocking iterator, off the event loop.
-                frame = await loop.run_in_executor(None, lambda: next(frame_iter, None))
+                frame = await loop.run_in_executor(self._reader, lambda: next(frame_iter, None))
                 if frame is None:
                     break
 
@@ -470,6 +476,8 @@ class CameraWorker:
         self._stopping = True
         if self.stream is not None:
             self.stream.close()
+        # No wait: a read still blocked on a dead stream must not hold up shutdown.
+        self._reader.shutdown(wait=False, cancel_futures=True)
         if self.traffic is not None:
             summary = self.traffic.close()
             if summary:

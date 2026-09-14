@@ -9,26 +9,17 @@ gets copied around and a session is not:
     SENTINEL_SENTINEL_TOKEN / SENTINEL_SENTINEL_COOKIE   a pasted session
     SENTINEL_GRID_EMAIL / SENTINEL_GRID_PASSWORD         login() mints one
 
-Pasted sessions expire; the password does not. Callers make their request
-with whatever session exists and call login() only when signed_out() says the
-grid refused it.
+ONE SESSION FOR EVERY PROCESS. Each process used to log in for itself and
+hold its cookie in memory, so ingest, the registry and every restart minted
+another session -- and past a burst of logins the grid refuses every
+request, fresh session or not. So a login's cookie is written to a file
+beside the media root that all processes read, and a new login happens only
+when the shared cookie itself was refused, and at most once per
+LOGIN_INTERVAL_S across all of them (the file's mtime is the clock).
 
-Logins are expensive to the grid in two ways, and login() guards both:
-
-- One session per account: a login invalidates the cookie the previous one
-  issued. login() is serialised, and skips the POST when another caller has
-  already replaced the session that was refused.
-- A burst of logins gets every request answered with a plain-text 403, fresh
-  session or not. A caller that read that 403 as "signed out" and logged in
-  again would keep the block in place, so login() posts at most once per
-  LOGIN_INTERVAL_S.
-
-Ceiling: both guards are per process. The registry and ingest share the
-account, so each still logs the other out and recovers on its next refused
-request. Ingest only needs the session for the catalogue (media goes over
-RTSP with its own credentials), so the churn is rare. If it ever costs
-frames, the upgrade is one session stored where every process reads it -- a
-database row -- instead of one login per process.
+Ceiling: the lock serialising logins is per process, so two processes whose
+refusals land in the same instant could both log in once. The interval
+bounds that to one extra session. A file lock is the upgrade if it matters.
 
 Distinct from the RTSP/WHEP credentials in sentinel.core.streamurl: those
 authenticate the *media* connection on the gateway and travel in the URL.
@@ -37,9 +28,11 @@ These authenticate the *control* surface on the CDN and travel in headers.
 
 from __future__ import annotations
 
+import os
 import re
 import threading
 import time
+from pathlib import Path
 
 import httpx
 from sentinel.core.config import settings
@@ -54,12 +47,11 @@ BROWSER_HEADERS = {
     )
 }
 
-#: Minimum seconds between login POSTs from one process.
-LOGIN_INTERVAL_S = 60.0
+#: Minimum seconds between logins, across every process sharing the file.
+LOGIN_INTERVAL_S = 600.0
 
-#: Cookies from a password login. Process-wide: the grid issues a session per
-#: account, so every caller in the process shares the one login() obtained.
-_login_cookies: dict[str, str] = {}
+#: This process's last attempt, successful or not. A failed login writes no
+#: file, so without this a refused POST could be retried on every request.
 _last_attempt = float("-inf")
 
 # A threading lock, not an asyncio one: ingest calls login() synchronously
@@ -67,10 +59,40 @@ _last_attempt = float("-inf")
 _login_lock = threading.Lock()
 
 
+def _session_file() -> Path:
+    """var/grid_session: beside the media root, never committed."""
+    return Path(settings.media_root).parent / "grid_session"
+
+
+def _shared_cookie() -> str | None:
+    try:
+        return _session_file().read_text().strip() or None
+    except OSError:
+        return None
+
+
+def _store_shared_cookie(token: str) -> None:
+    path = _session_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".tmp")
+    # Owner-only from creation: the file holds a live credential.
+    fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as handle:
+        handle.write(token)
+    os.replace(temporary, path)
+
+
+def _seconds_since_shared_login() -> float:
+    try:
+        return time.time() - _session_file().stat().st_mtime
+    except OSError:
+        return float("inf")
+
+
 def session_headers() -> dict[str, str]:
-    # Once login() has a fresh session, a pasted token is at best redundant
-    # and at worst the expired credential that sent us to login() at all.
-    if _login_cookies:
+    # Once a login has produced a session, a pasted token is at best
+    # redundant and at worst the expired credential that forced the login.
+    if _shared_cookie():
         return {}
     token = settings.sentinel_token.strip()
     return {"Authorization": f"Bearer {token}"} if token else {}
@@ -78,7 +100,7 @@ def session_headers() -> dict[str, str]:
 
 def session_cookies() -> dict[str, str]:
     """Session cookie, as `name=value` pairs in SENTINEL_SENTINEL_COOKIE,
-    overridden by whatever login() obtained.
+    overridden by the shared login session.
 
     From settings, not os.environ: pydantic loads .env into the settings
     object and not into the environment, so a cookie set there was invisible.
@@ -88,7 +110,9 @@ def session_cookies() -> dict[str, str]:
         if "=" in part:
             key, value = part.split("=", 1)
             cookies[key.strip()] = value.strip()
-    cookies.update(_login_cookies)
+    shared = _shared_cookie()
+    if shared:
+        cookies["sentinel"] = shared
     return cookies
 
 
@@ -103,21 +127,20 @@ def have_session() -> bool:
 
 
 def signed_out(response: httpx.Response) -> bool:
-    """Whether the grid refused the session: a 401/403 (expired, replaced by
-    another login, or throttled), or a redirect that ended on the HTML
-    sign-in page."""
+    """Whether the grid refused the session: a 401/403, or a redirect that
+    ended on the HTML sign-in page."""
     if response.status_code in (401, 403):
         return True
     return "text/html" in response.headers.get("content-type", "").lower()
 
 
 def login(base_url: str, rejected: dict[str, str] | None = None) -> bool:
-    """Sign in with SENTINEL_GRID_EMAIL / PASSWORD and keep the session cookie.
+    """Sign in with SENTINEL_GRID_EMAIL / PASSWORD, sharing the session.
 
     `rejected` is the cookie jar the caller's refused request was sent with.
-    If another caller has replaced that session since, the newer one is used
-    as it is: logging in again would invalidate it. Returns whether a session
-    the caller has not yet tried is now available.
+    If the shared session is already a different cookie -- another process or
+    request logged in since -- that one is used as it is. Returns whether a
+    session the caller has not yet tried is now available.
 
     Synchronous, because the ingest adapter is; async callers wrap it in
     asyncio.to_thread.
@@ -128,11 +151,11 @@ def login(base_url: str, rejected: dict[str, str] | None = None) -> bool:
         return False
 
     with _login_lock:
-        current = _login_cookies.get("sentinel")
-        if rejected is not None and current and current != rejected.get("sentinel"):
+        shared = _shared_cookie()
+        if shared and shared != (rejected or {}).get("sentinel"):
             return True
 
-        since = time.monotonic() - _last_attempt
+        since = min(_seconds_since_shared_login(), time.monotonic() - _last_attempt)
         if since < LOGIN_INTERVAL_S:
             log.warning("grid_login_throttled", retry_in_s=round(LOGIN_INTERVAL_S - since))
             return False
@@ -159,6 +182,6 @@ def login(base_url: str, rejected: dict[str, str] | None = None) -> bool:
             log.error("grid_login_rejected", status=response.status_code)
             return False
 
-        _login_cookies["sentinel"] = token
+        _store_shared_cookie(token)
         log.info("grid_login_success", cookie_len=len(token))
         return True

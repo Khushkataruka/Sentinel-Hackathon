@@ -216,8 +216,14 @@ class ByteTrack:
     #: association in one frame, and at least this fraction of them do.
     #: Two thresholds, because one vehicle leaving is not evidence of
     #: anything and the ratio alone is meaningless at low track counts.
-    CUT_MIN_TRACKS = 2
-    CUT_MIN_RATIO = 0.7
+    #:
+    #: Measured on a live feed processed at ~2 fps: 2 tracks losing association
+    #: together, and 3 of 4, both happen in ordinary traffic -- at irregular
+    #: PTS, not a loop period. At 2 and 0.7 those fired every few seconds, and
+    #: every false cut flushed the tracker, so each vehicle still on screen
+    #: came back as a second sighting.
+    CUT_MIN_TRACKS = 3
+    CUT_MIN_RATIO = 0.9
 
     def __init__(
         self,

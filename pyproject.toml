@@ -24,8 +24,10 @@ models = ["onnxruntime>=1.18"]
 # of gigabytes. Kept separate because someone who already has a yolo.onnx
 # should never have to download a training framework to run it.
 export = ["ultralytics>=8.2"]
-# The ANPR path: ultralytics for the plate detector, easyocr for the reader.
-anpr = ["ultralytics>=8.2", "easyocr>=1.7"]
+# The ANPR path: ultralytics for the plate detector; pytesseract for the
+# reader's default engine (it also needs the `tesseract` binary on PATH --
+# `brew install tesseract`) and easyocr for its fallback.
+anpr = ["ultralytics>=8.2", "easyocr>=1.7", "pytesseract>=0.3.13"]
 # The rider/helmet and phone detectors, which are ultralytics .pt weights run
 # straight rather than exported. Same framework as anpr, no OCR.
 violations = ["ultralytics>=8.2"]

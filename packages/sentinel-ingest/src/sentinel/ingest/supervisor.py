@@ -22,6 +22,26 @@ from sentinel.ingest.worker import CameraWorker
 
 log = get_logger(__name__)
 
+#: Seconds between starting one camera's worker and the next. Started all at
+#: once, 29 cameras opening RTSP together drew dozens of 401s and refused
+#: connections from the grid's gateway while the opens that did succeed
+#: trickled in one at a time -- a rate limit, as far as the logs show.
+STARTUP_STAGGER_S = 2.0
+
+
+def limit_cameras(cameras: dict[str, Adapter], limit: int | None) -> dict[str, Adapter]:
+    """The first `limit` cameras by id, or all of them when no limit is set.
+
+    The grid meters watch time per account, and all 29 cameras at once spent
+    it and locked the account out. Sorted, so the same cameras come back on
+    every restart rather than whichever the catalogue listed first.
+    """
+    if not limit or len(cameras) <= limit:
+        return cameras
+    kept = sorted(cameras)[:limit]
+    log.info("cameras_limited", limit=limit, kept=kept, skipped=len(cameras) - limit)
+    return {camera_id: cameras[camera_id] for camera_id in kept}
+
 
 async def _detect_model_id() -> int | None:
     """The model_versions row for the running detector.
@@ -46,6 +66,19 @@ class IngestSupervisor:
         self._stopping = asyncio.Event()
         self._detector = None
         self._detect_model_id: int | None = None
+
+    async def _stopped_within(self, seconds: float) -> bool:
+        """Wait up to `seconds`; True if a stop arrived in that time."""
+        try:
+            await asyncio.wait_for(self._stopping.wait(), timeout=seconds)
+            return True
+        except TimeoutError:
+            return False
+
+    async def _backoff(self, backoff: float) -> bool:
+        """A jittered backoff wait. True if a stop arrived meanwhile."""
+        delay = min(backoff, settings.reconnect_backoff_max_s)
+        return await self._stopped_within(delay * (0.75 + random.random() * 0.5))
 
     async def _camera_map(self) -> dict[str, Adapter]:
         """Every camera an adapter claims, mapped to the adapter that claims it.
@@ -83,6 +116,32 @@ class IngestSupervisor:
                 mapping[ref.camera_id] = loaded.adapter
         return mapping
 
+    async def _discover_cameras(self) -> dict[str, Adapter]:
+        """Load the adapters and map their cameras, retrying until some appear.
+
+        The grid refuses its catalogue for minutes at a time -- a session
+        refused straight after login, a throttle after a burst of stream
+        retries. Exiting on the first refusal left ingest dead until someone
+        restarted it by hand. Each attempt still lands in the adapters table.
+        Returns empty only when a stop arrives first.
+        """
+        backoff = settings.reconnect_backoff_initial_s
+        while not self._stopping.is_set():
+            self.adapters = discover()
+            await sync_to_registry(self.adapters)
+            cameras = await self._camera_map()
+            if cameras:
+                return cameras
+            log.error(
+                "no_cameras",
+                hint="check adapters, the registry and --only",
+                retry_backoff_s=round(min(backoff, settings.reconnect_backoff_max_s)),
+            )
+            if await self._backoff(backoff):
+                break
+            backoff = min(backoff * 2, settings.reconnect_backoff_max_s)
+        return {}
+
     async def _supervise(self, camera_id: str, adapter: Adapter) -> None:
         backoff = settings.reconnect_backoff_initial_s
         while not self._stopping.is_set():
@@ -107,27 +166,19 @@ class IngestSupervisor:
             except Exception as exc:
                 log.error("worker_failed", camera=camera_id, error=str(exc))
 
-            delay = min(backoff, settings.reconnect_backoff_max_s)
-            delay *= 0.75 + random.random() * 0.5
-            try:
-                await asyncio.wait_for(self._stopping.wait(), timeout=delay)
+            if await self._backoff(backoff):
                 return
-            except TimeoutError:
-                backoff = min(backoff * 2, settings.reconnect_backoff_max_s)
+            backoff = min(backoff * 2, settings.reconnect_backoff_max_s)
 
     async def run(self) -> None:
-        self.adapters = discover()
-        await sync_to_registry(self.adapters)
-
         self._detect_model_id = await _detect_model_id()
         # One detector shared across cameras: the ONNX session is thread-safe
         # for inference and loading N copies of the weights is the fastest way
         # to run out of memory at eighty thousand cameras.
         self._detector = load_detector(self._detect_model_id)
 
-        cameras = await self._camera_map()
+        cameras = limit_cameras(await self._discover_cameras(), settings.ingest_max_cameras)
         if not cameras:
-            log.error("no_cameras", hint="check adapters, the registry and --only")
             return
 
         log.info(
@@ -136,7 +187,9 @@ class IngestSupervisor:
             adapters=sum(1 for a in self.adapters if a.adapter),
         )
 
-        for camera_id, adapter in cameras.items():
+        for index, (camera_id, adapter) in enumerate(cameras.items()):
+            if index and await self._stopped_within(STARTUP_STAGGER_S):
+                break
             self.tasks[camera_id] = asyncio.create_task(
                 self._supervise(camera_id, adapter), name=f"camera:{camera_id}"
             )

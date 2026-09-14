@@ -1,12 +1,16 @@
 """Password login for the grid's control surface. No network: httpx.post is
 replaced with canned sign-in responses.
 
-The rules that matter are when login() does NOT post: the grid keeps one
-session per account, so a second login invalidates the first, and a burst of
-logins gets every request refused.
+The rules that matter are when login() does NOT post. Every process used to
+mint its own session, and past a burst of logins the grid refuses every
+request -- so one session is shared through a file, and logins are rare.
 """
 
 from __future__ import annotations
+
+import os
+import stat
+import time
 
 import httpx
 import pytest
@@ -17,8 +21,8 @@ BASE = "https://grid.example"
 
 
 @pytest.fixture(autouse=True)
-def credentials(monkeypatch):
-    monkeypatch.setattr(gridauth, "_login_cookies", {})
+def credentials(monkeypatch, tmp_path):
+    monkeypatch.setattr(settings, "media_root", tmp_path / "media")
     monkeypatch.setattr(gridauth, "_last_attempt", float("-inf"))
     monkeypatch.setattr(settings, "grid_email", "alice@example.com")
     monkeypatch.setattr(settings, "grid_password", "hunter2")
@@ -38,18 +42,66 @@ def forbid_login(monkeypatch):
     monkeypatch.setattr(httpx, "post", lambda *a, **k: pytest.fail("should not log in"))
 
 
-def test_login_keeps_the_session_and_drops_the_stale_token(monkeypatch):
+def share(cookie, age_s=0.0):
+    """A session some process already wrote, `age_s` seconds ago."""
+    path = gridauth._session_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(cookie)
+    stamp = time.time() - age_s
+    os.utime(path, (stamp, stamp))
+
+
+def test_login_writes_one_owner_only_session_and_drops_the_stale_token(monkeypatch):
     assert gridauth.session_headers() == {"Authorization": "Bearer expired-token"}
     answer(monkeypatch, 302, "sentinel=fresh; Path=/; HttpOnly")
 
     assert gridauth.login(BASE + "/")
     assert gridauth.session_cookies() == {"sentinel": "fresh"}
     assert gridauth.session_headers() == {}
+    assert stat.S_IMODE(gridauth._session_file().stat().st_mode) == 0o600
 
 
-def test_a_rejected_login_leaves_the_session_alone(monkeypatch):
+def test_another_process_reuses_the_shared_session_without_logging_in(monkeypatch):
+    """What used to mint a session per process and per restart."""
+    share("from-registry")
+    forbid_login(monkeypatch)
+
+    assert gridauth.session_cookies() == {"sentinel": "from-registry"}
+    # A request refused with no session at all finds the shared one.
+    assert gridauth.login(BASE, rejected={})
+
+
+def test_a_session_someone_else_already_replaced_is_reused(monkeypatch):
+    share("newer")
+    forbid_login(monkeypatch)
+
+    assert gridauth.login(BASE, rejected={"sentinel": "older"})
+
+
+def test_a_refused_shared_session_is_not_replaced_within_the_interval(monkeypatch):
+    """A fresh session refused straight away is the grid throttling us;
+    logging in again on every 403 is what kept the block in place."""
+    share("current", age_s=60)
+    forbid_login(monkeypatch)
+
+    assert not gridauth.login(BASE, rejected={"sentinel": "current"})
+
+
+def test_a_refused_shared_session_is_replaced_once_the_interval_passes(monkeypatch):
+    share("dead", age_s=gridauth.LOGIN_INTERVAL_S + 1)
+    answer(monkeypatch, 302, "sentinel=fresh; Path=/")
+
+    assert gridauth.login(BASE, rejected={"sentinel": "dead"})
+    assert gridauth.session_cookies() == {"sentinel": "fresh"}
+
+
+def test_a_failed_login_is_not_retried_straight_away(monkeypatch):
+    """A failed POST writes no file, so the file's age alone would allow
+    another attempt on the very next request."""
     answer(monkeypatch, 200)  # the sign-in page again, no cookie
+    assert not gridauth.login(BASE)
 
+    forbid_login(monkeypatch)
     assert not gridauth.login(BASE)
     assert gridauth.session_cookies() == {}
     assert gridauth.session_headers() == {"Authorization": "Bearer expired-token"}
@@ -62,38 +114,10 @@ def test_no_credentials_means_no_request(monkeypatch):
     assert not gridauth.login(BASE)
 
 
-def test_a_session_someone_else_already_replaced_is_reused(monkeypatch):
-    """Two requests refused together: the second must not log the first out."""
-    monkeypatch.setattr(gridauth, "_login_cookies", {"sentinel": "newer"})
-    forbid_login(monkeypatch)
-
-    assert gridauth.login(BASE, rejected={"sentinel": "older"})
-    assert gridauth.session_cookies() == {"sentinel": "newer"}
-
-
-def test_the_current_session_refused_means_log_in_again(monkeypatch):
-    """Another process's login replaced ours: the cookie we hold is dead."""
-    monkeypatch.setattr(gridauth, "_login_cookies", {"sentinel": "dead"})
-    answer(monkeypatch, 302, "sentinel=fresh; Path=/")
-
-    assert gridauth.login(BASE, rejected={"sentinel": "dead"})
-    assert gridauth.session_cookies() == {"sentinel": "fresh"}
-
-
-def test_logins_are_rate_limited(monkeypatch):
-    """A fresh session refused straight away is the grid throttling us;
-    logging in again on every 403 would keep it that way."""
-    answer(monkeypatch, 302, "sentinel=fresh; Path=/")
-    assert gridauth.login(BASE)
-
-    forbid_login(monkeypatch)
-    assert not gridauth.login(BASE, rejected={"sentinel": "fresh"})
-
-
 @pytest.mark.parametrize(
     ("status", "content_type", "expected"),
     [
-        (403, "text/plain", True),  # replaced by another login, or throttled
+        (403, "text/plain", True),
         (401, "", True),
         (200, "text/html; charset=utf-8", True),  # redirected to the sign-in page
         (200, "application/json", False),

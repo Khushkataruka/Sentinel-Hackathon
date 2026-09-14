@@ -298,8 +298,17 @@ class CameraStream:
                 yield Frame(image, seen_at, pts_s, 0.0, self.frames_decoded, True)
                 continue
 
+            previous_emitted_pts = self._last_emitted_pts
             if not self._should_emit(pts_s):
                 continue
+
+            # dt since the last frame the caller was given, not the last frame
+            # decoded: the clock observes every decoded frame and the rate limit
+            # skips most of them. The decoded-frame delta under-reported time to
+            # the tracker by the skip ratio (0.04s for 0.12s at 25 fps), so its
+            # lost-track timeout ran that many times too long.
+            if previous_emitted_pts is not None:
+                dt_s = pts_s - previous_emitted_pts
 
             self.frames_emitted += 1
             yield Frame(image, seen_at, pts_s, dt_s, self.frames_decoded)
