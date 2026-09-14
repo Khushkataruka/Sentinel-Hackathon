@@ -14,17 +14,18 @@ all measured, none of them a model's opinion of its own output.
 
 from __future__ import annotations
 
+import base64
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
-import base64
-import json
 import cv2
 import httpx
 import numpy as np
 from sentinel.core.config import settings
 from sentinel.core.logging import get_logger
+from sentinel.pipelines.models.caption_prompt import FEW_SHOT_EXAMPLES, caption_messages
 from sentinel.pipelines.models.stubbase import dominant_colour_name, rng_for
 
 log = get_logger(__name__)
@@ -171,83 +172,92 @@ class StubCaptionEmbedder:
         return (vector / norm).tolist() if norm else vector.tolist()
 
 
+def parse_description_xml(content: str) -> Description:
+    """Validate the model's XML and extract only persisted description fields."""
+    if not isinstance(content, str) or not content.strip():
+        raise ValueError("vLLM returned no XML description")
+    content = content.strip()
+    if content.startswith("```") and content.endswith("```"):
+        lines = content.splitlines()
+        if lines[0].lower() in {"```", "```xml"}:
+            content = "\n".join(lines[1:-1]).strip()
+    if "<!DOCTYPE" in content or "<!ENTITY" in content:
+        raise ValueError("vLLM returned unsupported XML")
+    try:
+        root = ET.fromstring(content)
+    except ET.ParseError as exc:
+        raise ValueError("vLLM returned malformed vehicle XML") from exc
+
+    expected = {"thinking", "type", "colour", "make", "model", "features", "caption"}
+    if root.tag != "image" or len(root) != len(expected) or {c.tag for c in root} != expected:
+        raise ValueError("vLLM XML must contain one image with all description fields")
+    if any(node.attrib or (node.tail or "").strip() for node in root.iter()):
+        raise ValueError("vLLM XML contains unexpected attributes or text")
+    if (root.text or "").strip():
+        raise ValueError("vLLM XML contains text outside its description fields")
+
+    def text_value(element: ET.Element) -> str | None:
+        if len(element):
+            raise ValueError(f"vLLM XML field {element.tag} must contain plain text")
+        value = (element.text or "").strip()
+        return None if value.lower() in {"", "unknown", "none", "null", "n/a"} else value
+
+    fields = {child.tag: text_value(child) for child in root if child.tag != "features"}
+    features = root.find("features")
+    if (features.text or "").strip() or any(c.tag != "feature" for c in features):
+        raise ValueError("vLLM XML features must contain feature elements")
+    return Description(
+        colour=fields["colour"],
+        vtype=fields["type"],
+        make=fields["make"],
+        model=fields["model"],
+        features=[value for child in features if (value := text_value(child))],
+        caption=fields["caption"] or "",
+    )
+
+
 class VllmCaptioner:
-    """Uses a vLLM chat endpoint to generate structured descriptions."""
-    
+    """Describe a JPEG crop through vLLM using three-shot XML prompting."""
+
     is_stub = False
 
     def __init__(self, base_url: str, model: str) -> None:
-        self.base_url = base_url.rstrip("/")
+        self.base_url = base_url.strip().rstrip("/")
         self.model = model
-        self.endpoint = f"{self.base_url}/v1/chat/completions"
-        self.client = httpx.Client(timeout=30.0)
+        api_base = self.base_url if self.base_url.endswith("/v1") else f"{self.base_url}/v1"
+        self.endpoint = f"{api_base}/chat/completions"
+        self.client = httpx.Client(timeout=settings.vllm_timeout_s)
+        log.info("vllm_captioner_enabled", model=model, examples=len(FEW_SHOT_EXAMPLES))
 
     def __call__(self, crop: np.ndarray, vehicle_class: str) -> Description:
-        # Encode image
-        _, buffer = cv2.imencode('.jpg', crop)
-        b64_img = base64.b64encode(buffer).decode('utf-8')
+        if crop is None or crop.size == 0:
+            raise ValueError("cannot caption an empty crop")
+        encoded, buffer = cv2.imencode(".jpg", crop)
+        if not encoded:
+            raise ValueError("could not encode crop as JPEG")
+        b64_img = base64.b64encode(buffer).decode("ascii")
         image_data_url = f"data:image/jpeg;base64,{b64_img}"
-
-        prompt = (
-            f"This is an image of a {vehicle_class}. "
-            "Please describe this vehicle in detail. Return ONLY a JSON object with the following keys:\n"
-            "- colour: string (the primary color)\n"
-            "- vtype: string (e.g. hatchback, sedan, suv, motorcycle, bus, truck, etc.)\n"
-            "- make: string (the manufacturer brand)\n"
-            "- model: string (the specific vehicle model)\n"
-            "- features: list of strings (e.g. ['roof carrier', 'tinted windows'])\n"
-            "- caption: string (a brief 1-2 sentence description of the vehicle)\n"
-            "Respond with strictly valid JSON and no markdown formatting or backticks."
-        )
 
         payload = {
             "model": self.model,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt},
-                        {"type": "image_url", "image_url": {"url": image_data_url}}
-                    ]
-                }
-            ],
-            "temperature": 0.2,
-            "max_tokens": 256,
-            "stream": False
+            "messages": caption_messages(image_data_url, vehicle_class),
+            "temperature": 0,
+            "max_tokens": settings.vllm_max_tokens,
+            "stream": False,
         }
 
+        # Let transport and parsing failures reach the queue's retry handling;
+        # returning an empty Description would mark a failed inference as done.
+        response = self.client.post(self.endpoint, json=payload)
+        response.raise_for_status()
         try:
-            response = self.client.post(self.endpoint, json=payload)
-            response.raise_for_status()
-            data = response.json()
-            content = data["choices"][0]["message"]["content"].strip()
-            
-            # Clean markdown code blocks if present
-            if content.startswith("```json"):
-                content = content[7:]
-            if content.startswith("```"):
-                content = content[3:]
-            if content.endswith("```"):
-                content = content[:-3]
-                
-            parsed = json.loads(content.strip())
-            
-            # Helper to safely extract strings
-            def get_str(k):
-                v = parsed.get(k)
-                return str(v) if v is not None and str(v).lower() != "none" else None
-                
-            return Description(
-                colour=get_str("colour"),
-                vtype=get_str("vtype"),
-                make=get_str("make"),
-                model=get_str("model"),
-                features=parsed.get("features", []) if isinstance(parsed.get("features"), list) else [],
-                caption=get_str("caption") or ""
-            )
-        except Exception as exc:
-            log.warning("vllm_caption_failed", error=str(exc))
-            return Description()
+            choice = response.json()["choices"][0]
+            content = choice["message"]["content"]
+        except (KeyError, IndexError, TypeError) as exc:
+            raise ValueError("vLLM returned no chat completion") from exc
+        if choice.get("finish_reason") not in {None, "stop"}:
+            raise ValueError("vLLM did not finish the XML description")
+        return parse_description_xml(content)
 
 
 def load_captioner() -> Captioner:

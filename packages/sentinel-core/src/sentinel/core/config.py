@@ -88,6 +88,9 @@ class Settings(BaseSettings):
 
     vllm_url: str = ""
     vllm_model: str = "google/gemma-3-27b-it"
+    # Leave room for multi-paragraph <thinking> followed by all XML fields.
+    vllm_max_tokens: int = Field(4096, ge=1)
+    vllm_timeout_s: float = Field(120.0, gt=0)
     #: Rider/helmet and phone detectors. Ultralytics .pt, run over the vehicle
     #: crop rather than the frame -- see pipelines/models/violations.py.
     helmet_model_path: Path = Path("./var/models/helmet_merged_yolo11m_best.pt")

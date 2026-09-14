@@ -153,7 +153,11 @@ class PipelineWorker(abc.ABC):
 
         while not self._stopping.is_set():
             async with acquire() as conn:
-                jobs = await queue.claim(conn, self.pipeline)
+                # Long remote inference can outlast the lease of prefetched
+                # jobs waiting on the semaphore. Claim only available slots.
+                jobs = await queue.claim(
+                    conn, self.pipeline, limit=min(settings.queue_claim_batch, self.concurrency)
+                )
 
             if not jobs:
                 if self.drain:
