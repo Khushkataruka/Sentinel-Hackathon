@@ -98,7 +98,7 @@ export default function SightingsPage() {
                     <span>
                       {sighting.best_plate || sighting.make || sighting.type || [sighting.colour, sighting.type, sighting.make, sighting.model]
                         .filter(Boolean)
-                        .join(' ') 'Unknown vehicle'}
+                        .join(' ') ||  'Unknown vehicle'}
                     </span>
                     {sighting.best_plate && <span className="badge ok">Plate read</span>}
                   </div>
