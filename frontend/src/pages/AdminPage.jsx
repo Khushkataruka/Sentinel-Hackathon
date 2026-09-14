@@ -147,7 +147,9 @@ export default function AdminPage() {
                             {adapter.status}
                           </span>
                         </td>
-                        <td className="muted">{adapter.last_error || '—'}</td>
+                        <td className="muted error-cell" title={adapter.last_error}>
+                          {adapter.last_error || '—'}
+                        </td>
                         <td className="muted">
                           {adapter.tested_at && new Date(adapter.tested_at).toLocaleString()}
                         </td>
