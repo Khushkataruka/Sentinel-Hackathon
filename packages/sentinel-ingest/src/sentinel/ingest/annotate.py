@@ -25,6 +25,7 @@ import json
 import shutil
 import subprocess
 from collections.abc import Mapping
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -168,12 +169,16 @@ def describe_lines(row: Mapping[str, Any]) -> list[str]:
     return lines
 
 
-async def load_labels(camera_id: str) -> dict[str, Label]:
+async def load_labels(
+    camera_id: str, track_ids: list[str] | None = None, *, conn=None
+) -> dict[str, Label]:
     """One query per camera for every sighting it produced, plus violations.
 
     Keyed by `sightings.track_id`, which is what the sidecar recorded.
     """
-    async with acquire() as conn:
+    if track_ids == []:
+        return {}
+    async with acquire() if conn is None else nullcontext(conn) as conn:
         rows = await conn.fetch(
             """
             SELECT s.read_id, s.track_id, s.class, s.colour, s.vtype, s.make,
@@ -187,9 +192,11 @@ async def load_labels(camera_id: str) -> dict[str, Label]:
               FROM sightings s
               LEFT JOIN violations v ON v.read_id = s.read_id
              WHERE s.camera_id = $1
+               AND ($2::text[] IS NULL OR s.track_id = ANY($2::text[]))
              GROUP BY s.read_id
             """,
             camera_id,
+            track_ids,
         )
 
     labels: dict[str, Label] = {}
@@ -435,14 +442,14 @@ def read_sidecar(path: Path) -> tuple[dict[str, Any], dict[int, dict[str, Any]]]
     return header, frames
 
 
-async def stub_note() -> str | None:
+async def stub_note(*, conn=None) -> str | None:
     """A banner whenever what produced these labels was not a real model.
 
     An annotated video is the most quotable artefact this repo produces, and a
     stub caption reads exactly like a real one at a glance. `model_versions`
     already records which weights ran; this only surfaces it.
     """
-    async with acquire() as conn:
+    async with acquire() if conn is None else nullcontext(conn) as conn:
         rows = await conn.fetch(
             "SELECT role, version FROM model_versions ORDER BY registered_at DESC"
         )

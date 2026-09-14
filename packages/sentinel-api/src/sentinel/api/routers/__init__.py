@@ -1,14 +1,16 @@
 from sentinel.api.routers import (
     alerts,
+    annotated,
     evidence,
+    live_sightings,
     mapview,
     search,
     traffic,
     violations,
-    live_sightings,
 )
 
 ROUTERS = [
+    annotated.router,
     mapview.router,
     search.router,
     alerts.router,

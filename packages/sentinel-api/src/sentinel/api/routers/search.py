@@ -4,9 +4,11 @@ import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 from sentinel.api.deps import DbConn, DbTxn, User
+from sentinel.core import audit
 from sentinel.core.models import VehicleDescription
+from sentinel.core.types import ActorKind, AlertTier
 from sentinel.correlation import search as search_lib
 from sentinel.correlation import watchlist
 
@@ -169,15 +171,23 @@ async def route_detail(route_id: uuid.UUID, conn: DbConn, user: User):
 
 
 class WatchlistEntryIn(BaseModel):
-    label: str
-    reason: str
+    label: str = Field(min_length=1)
+    reason: str = Field(min_length=1)
     registration_no: str | None = None
     colour: str | None = None
     vtype: str | None = None
     make: str | None = None
     model: str | None = None
-    priority: str = "review"
-    backfill_days: int = 15
+    priority: AlertTier = AlertTier.REVIEW
+    backfill_days: int = Field(15, ge=1, le=90)
+
+    @model_validator(mode="after")
+    def needs_a_target(self) -> WatchlistEntryIn:
+        # An entry naming nothing would never alert live, and its backfill
+        # would search for every vehicle on record.
+        if not any([self.registration_no, self.colour, self.vtype, self.make, self.model]):
+            raise ValueError("give a registration number or at least one vehicle attribute")
+        return self
 
 
 @router.post("/watchlist", status_code=status.HTTP_201_CREATED)
@@ -201,7 +211,7 @@ async def add_watchlist_entry(body: WatchlistEntryIn, conn: DbTxn, user: User):
         body.vtype,
         body.make,
         body.model,
-        body.priority,
+        body.priority.value,
         body.reason,
         uuid.UUID(user.id),
     )
@@ -226,3 +236,23 @@ async def list_watchlist(conn: DbConn, user: User):
         """
     )
     return [dict(r) for r in rows]
+
+
+@router.delete("/watchlist/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_watchlist_entry(entry_id: uuid.UUID, conn: DbTxn, user: User):
+    """Deactivate, never delete: alerts and searches reference the entry, and
+    what the platform was watching for is part of the audit record."""
+    updated = await conn.fetchval(
+        "UPDATE watchlist_entries SET active = false WHERE id = $1 AND active RETURNING id",
+        entry_id,
+    )
+    if updated is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no active watchlist entry with that id")
+    await audit.write(
+        conn,
+        actor_kind=ActorKind.USER,
+        actor_id=user.id,
+        action="watchlist.remove",
+        object_type="watchlist_entry",
+        object_id=str(entry_id),
+    )

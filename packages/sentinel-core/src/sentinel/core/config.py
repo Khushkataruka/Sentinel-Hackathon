@@ -111,6 +111,13 @@ class Settings(BaseSettings):
     target_decode_fps: float = 10.0  # tracking needs 8-12; the archive needs 1
     archive_fps: float = 1.0
 
+    # Delayed annotated playback. The shared media volume holds a bounded
+    # JPEG ring per ingest worker; offline runs do not publish to it.
+    annotated_feed_enabled: bool = True
+    annotated_feed_delay_s: float = Field(60.0, ge=1, le=300)
+    annotated_feed_fps: float = Field(5.0, ge=1, le=10)
+    annotated_feed_width: int = Field(960, ge=320, le=1920)
+
     min_track_frames: int = 3
     reconnect_backoff_initial_s: float = 2.0
     reconnect_backoff_max_s: float = 30.0
@@ -141,7 +148,7 @@ class Settings(BaseSettings):
     knn_limit: int = 200
     max_route_legs: int = 12
     max_routes: int = 200
-    max_plausible_speed_kmh: float = 140.0
+    max_plausible_speed_kmh: float = 60.0
     min_plausible_speed_kmh: float = 2.0
 
     # -- logging -----------------------------------------------------------

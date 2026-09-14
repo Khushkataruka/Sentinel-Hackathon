@@ -41,6 +41,7 @@ export default defineConfig({
       '/sync': serviceProxy('http://127.0.0.1:8000'),
       '/stream': serviceProxy('http://127.0.0.1:8000'),
       '/live_sightings': serviceProxy('http://127.0.0.1:8001'),
+      '/annotated': serviceProxy('http://127.0.0.1:8001'),
     },
   },
 })

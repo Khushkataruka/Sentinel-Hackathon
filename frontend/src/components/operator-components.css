@@ -220,6 +220,73 @@
   object-fit: cover;
   display: block;
 }
+.player-stage .annotated-feed-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.player-stage .annotated-feed-image[hidden] {
+  display: none;
+}
+.player-mode-switch {
+  display: flex;
+  gap: 5px;
+  margin: 0 0 9px;
+}
+.player-mode-switch button {
+  padding: 5px 8px;
+  border: 1px solid #2c3b26;
+  border-radius: 5px;
+  background: #0e170f;
+  color: #9cae94;
+  font: 10px/1.4 var(--font-mono, monospace);
+}
+.player-mode-switch button[aria-pressed='true'] {
+  color: #c0ed94;
+  background: #21331a;
+  border-color: #527737;
+}
+.annotated-feed-details {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 5px;
+  margin-top: 8px;
+  color: #a6b49e;
+  font: 9px/1.6 var(--font-mono, monospace);
+}
+.annotated-feed-note {
+  margin: 5px 0 0;
+  color: #a6b49e;
+  font-size: 10px;
+}
+.annotated-feed-note.is-warning {
+  color: #e8b961;
+}
+.player-expand {
+  padding: 2px 6px;
+  border: 1px solid #3d5431;
+  border-radius: 4px;
+  background: #172312;
+  color: #c0ed94;
+  font: inherit;
+}
+.annotated-feed:fullscreen {
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  background: #070c09;
+}
+.annotated-feed:fullscreen .player-stage {
+  flex: 1;
+  min-height: 0;
+  aspect-ratio: auto;
+}
+.annotated-feed:fullscreen .annotated-feed-details,
+.annotated-feed:fullscreen .annotated-feed-note {
+  font-size: 13px;
+}
 .player-overlay {
   position: absolute;
   inset: 0;

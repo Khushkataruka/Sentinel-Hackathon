@@ -53,6 +53,30 @@ async function request(path, options = {}) {
 }
 
 export const api = {
+  async annotatedFrame(cameraId, signal) {
+    const response = await fetch(`/annotated/${encodeURIComponent(cameraId)}/frame`, {
+      signal,
+      cache: 'no-store',
+      headers: { [USER_HEADER]: currentUser(), Accept: 'image/jpeg, application/json' },
+    })
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}))
+      throw new Error(body.detail || 'The annotated feed is unavailable. Reconnecting…')
+    }
+    if (response.status === 202) return response.json()
+    if (!response.headers.get('content-type')?.includes('image/jpeg')) {
+      throw new Error('The annotated feed service is not connected.')
+    }
+    return {
+      state: 'playing',
+      image: await response.blob(),
+      seen_at: response.headers.get('X-Frame-Seen-At'),
+      delay_s: Number(response.headers.get('X-Frame-Delay')),
+      fps: Number(response.headers.get('X-Feed-Fps')),
+      pending: Number(response.headers.get('X-Pending-Tracks')),
+      model_note: response.headers.get('X-Model-Note'),
+    }
+  },
   // map
   cameras: () => request('/map/cameras'),
   coverage: () => request('/map/coverage'),
@@ -111,7 +135,14 @@ export const api = {
 
   // watchlist
   watchlist: () => request('/watchlist'),
-  addWatchlist: (body) => request('/watchlist', { method: 'POST', body: JSON.stringify(body) }),
+  // Adding runs a backfill search over history, so it gets the search timeout.
+  addWatchlist: (body) =>
+    request('/watchlist', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(60000),
+    }),
+  removeWatchlist: (id) => request(`/watchlist/${id}`, { method: 'DELETE' }),
 
   // admin, on the registry
   adapters: () => request('/adapters'),

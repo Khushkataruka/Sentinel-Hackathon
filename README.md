@@ -54,6 +54,54 @@ Operators can now onboard new CCTV cameras directly from the UI on both the **Ad
 - **YOLO ONNX Engine**: Model exported to `var/models/yolo.onnx` for real object detection and tracking.
 - **ANPR & Database Writes**: Video frame pipeline extracts vehicle tracks, license plate text (OCR), vehicle features, and violation events directly into PostgreSQL (`sightings`, `vehicle_features`, `violations`).
 
+### 4. On-demand annotated camera playback
+
+Select an existing camera on the map, then choose **Annotated · ~1 min delay**.
+The first viewer starts a 60-second buffer; a countdown appears while it fills.
+The player shows vehicle boxes on their original frames, plus descriptions,
+plates and violations that have finished processing. Open tracks and unfinished
+analysis are marked pending. **Live** switches back to the existing raw HLS feed.
+
+Only cameras with an annotated viewer encode buffered frames. Viewers of the
+same camera share one buffer and the existing detector/tracker. After the last
+viewer leaves, a 15-second lease expires and the worker stops buffering and
+removes its buffered frames on its next frame. Ordinary background ingest and
+analysis still run for the cameras configured in the ingest supervisor.
+
+The annotated feed is a sequence of JPEG frames at up to **5 fps / 960 px wide**,
+without audio or seeking. It uses `/annotated/{camera_id}/frame` on the API;
+both development and production proxies route this endpoint. The default ring
+holds at most 376 frame packets per watched camera. Rendering and delivery cost
+scale with active viewers; they do not run for every registered camera. This
+path favors simple deployment over full-frame-rate HLS transcoding.
+
+Ingest and API must share `SENTINEL_MEDIA_ROOT` and the same annotated-feed
+settings. Compose already mounts the same media directory into both services.
+Keep the crop pipelines running to receive enriched labels. With a native
+installation, the relevant services are:
+
+```bash
+uv run sentinel-ingest run --only CAMERA_ID  # omit --only for the configured estate
+uv run sentinel-pipeline run --all         # separate terminal
+uv run sentinel-api                        # separate terminal; frontend as usual
+```
+
+After updating a Docker deployment, rebuild and recreate ingest, API and web:
+
+```bash
+docker compose up -d --build ingest api web
+```
+
+Configure `SENTINEL_ANNOTATED_FEED_ENABLED`, `SENTINEL_ANNOTATED_FEED_DELAY_S`,
+`SENTINEL_ANNOTATED_FEED_FPS` and `SENTINEL_ANNOTATED_FEED_WIDTH` in `.env`, then
+restart ingest and API together. No database migration is required. The delay
+is measured from arrival at the ingest worker; upstream camera/network lag and
+slow detection can add to the age of the footage. The captured timestamp is
+displayed separately. Analysis that takes longer than the buffer remains pending
+instead of delaying playback. A stopped feed is reported rather than silently
+showing its last frame as current. Missing detectors and registered stub models
+are indicated in the player.
+
 ---
 
 ## Getting it running

@@ -6,6 +6,33 @@ import './workspace.css'
 const COLOURS = ['white', 'black', 'grey', 'silver', 'red', 'blue', 'green', 'yellow', 'brown', 'orange', 'maroon']
 const VTYPES = ['hatchback', 'sedan', 'suv', 'muv', 'pickup', 'van', 'bus', 'truck', 'motorcycle', 'bicycle']
 const MAKES = ['maruti', 'hyundai', 'tata', 'mahindra', 'toyota', 'honda', 'kia']
+const WATCH_TARGETS = ['registration_no', 'colour', 'vtype', 'make', 'model']
+const EMPTY_ENTRY = {
+  label: '',
+  reason: '',
+  registration_no: '',
+  colour: '',
+  vtype: '',
+  make: '',
+  model: '',
+  priority: 'review',
+}
+
+function OptionSelect({ label, anyLabel, options, value, onChange }) {
+  return (
+    <label className="field">
+      <span className="data-label">{label}</span>
+      <select value={value} onChange={onChange}>
+        <option value="">{anyLabel}</option>
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {o.charAt(0).toUpperCase() + o.slice(1)}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+}
 
 export default function SearchPage() {
   const [searchParams] = useSearchParams()
@@ -141,39 +168,27 @@ export default function SearchPage() {
                 onChange={(e) => setCaption(e.target.value)}
               />
             </label>
-            <label className="field">
-              <span className="data-label">Colour</span>
-              <select value={colour} onChange={(e) => setColour(e.target.value)}>
-                <option value="">Any colour</option>
-                {COLOURS.map((c) => (
-                  <option key={c} value={c}>
-                    {c.charAt(0).toUpperCase() + c.slice(1)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field">
-              <span className="data-label">Vehicle type</span>
-              <select value={vtype} onChange={(e) => setVtype(e.target.value)}>
-                <option value="">Any type</option>
-                {VTYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t.charAt(0).toUpperCase() + t.slice(1)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field">
-              <span className="data-label">Make</span>
-              <select value={make} onChange={(e) => setMake(e.target.value)}>
-                <option value="">Any make</option>
-                {MAKES.map((m) => (
-                  <option key={m} value={m}>
-                    {m.charAt(0).toUpperCase() + m.slice(1)}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <OptionSelect
+              label="Colour"
+              anyLabel="Any colour"
+              options={COLOURS}
+              value={colour}
+              onChange={(e) => setColour(e.target.value)}
+            />
+            <OptionSelect
+              label="Vehicle type"
+              anyLabel="Any type"
+              options={VTYPES}
+              value={vtype}
+              onChange={(e) => setVtype(e.target.value)}
+            />
+            <OptionSelect
+              label="Make"
+              anyLabel="Any make"
+              options={MAKES}
+              value={make}
+              onChange={(e) => setMake(e.target.value)}
+            />
             <label className="field">
               <span className="data-label">Model</span>
               <input
@@ -274,51 +289,66 @@ export default function SearchPage() {
             <section style={{ marginTop: 12 }}>
               {sightings.length > 0 ? (
                 <div className="search-results-grid">
-                  {sightings.map((s) => (
-                    <div className="search-result-card" key={s.read_id}>
-                      <div className="src-image-wrap">
-                        <img
-                          src={api.mediaUrl(s.crop_ref)}
-                          alt="Vehicle crop"
-                          className="src-image"
-                          loading="lazy"
-                        />
-                        {s.score > 0 && (
-                          <span className="src-score">{(s.score * 100).toFixed(0)}%</span>
-                        )}
-                      </div>
-                      <div className="src-body">
-                        <div className="src-title-row">
-                          <span className="src-title">
-                            {s.plate_text || [s.colour, s.make, s.model].filter(Boolean).join(' ') || s.type || 'Unknown'}
-                          </span>
-                          {s.plate_text && <span className="signal-badge" style={{ fontSize: '0.6rem', padding: '2px 5px' }}>PLATE</span>}
+                  {sightings.map((s) => {
+                    // Routes arrive rank-ordered, so the first one holding this
+                    // sighting is its best-scored route.
+                    const route = result.routes?.find((r) => r.read_ids?.includes(s.read_id))
+                    const Card = route ? Link : 'div'
+                    return (
+                      <Card
+                        className="search-result-card"
+                        key={s.read_id}
+                        to={route ? `/routes/${route.route_id}` : undefined}
+                      >
+                        <div className="src-image-wrap">
+                          <img
+                            src={api.mediaUrl(s.crop_ref)}
+                            alt="Vehicle crop"
+                            className="src-image"
+                            loading="lazy"
+                          />
+                          {s.score > 0 && (
+                            <span className="src-score">{(s.score * 100).toFixed(0)}%</span>
+                          )}
                         </div>
-                        <div className="src-meta">
-                          {s.colour && <span className="src-attr">{s.colour}</span>}
-                          {s.type && <span className="src-attr">{s.type}</span>}
-                          {s.make && <span className="src-attr">{s.make}</span>}
-                          {s.model && <span className="src-attr">{s.model}</span>}
-                        </div>
-                        <div className="src-detail">
-                          <span>{s.camera_name || s.camera_id}</span>
-                          <span>{s.seen_at ? new Date(s.seen_at).toLocaleString() : ''}</span>
-                        </div>
-                        {s.matched_on?.length > 0 && (
-                          <div className="src-signals">
-                            {s.matched_on.map((sig) => (
-                              <span key={sig} className={`signal-badge ${sig === 'plate' ? '' : sig === 'attribute' ? '' : 'caution'}`}>
-                                {sig}
-                              </span>
-                            ))}
+                        <div className="src-body">
+                          <div className="src-title-row">
+                            <span className="src-title">
+                              {s.plate_text || [s.colour, s.make, s.model].filter(Boolean).join(' ') || s.type || 'Unknown'}
+                            </span>
+                            {s.plate_text && <span className="signal-badge" style={{ fontSize: '0.6rem', padding: '2px 5px' }}>PLATE</span>}
                           </div>
-                        )}
-                        {s.caption && !s.caption.startsWith('[stub]') && (
-                          <p className="src-caption">{s.caption}</p>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                          <div className="src-meta">
+                            {s.colour && <span className="src-attr">{s.colour}</span>}
+                            {s.type && <span className="src-attr">{s.type}</span>}
+                            {s.make && <span className="src-attr">{s.make}</span>}
+                            {s.model && <span className="src-attr">{s.model}</span>}
+                          </div>
+                          <div className="src-detail">
+                            <span>{s.camera_name || s.camera_id}</span>
+                            <span>{s.seen_at ? new Date(s.seen_at).toLocaleString() : ''}</span>
+                          </div>
+                          {s.matched_on?.length > 0 && (
+                            <div className="src-signals">
+                              {s.matched_on.map((sig) => (
+                                <span key={sig} className={`signal-badge ${sig === 'plate' ? '' : sig === 'attribute' ? '' : 'caution'}`}>
+                                  {sig}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          {s.caption && !s.caption.startsWith('[stub]') && (
+                            <p className="src-caption">{s.caption}</p>
+                          )}
+                          <span className="src-route">
+                            {route
+                              ? `View route #${route.rank} · ${route.read_ids.length} sightings →`
+                              : 'Not part of any route chain'}
+                          </span>
+                        </div>
+                      </Card>
+                    )
+                  })}
                 </div>
               ) : (
                 <div className="panel state-panel">
@@ -395,6 +425,232 @@ export default function SearchPage() {
           )}
         </>
       )}
+
+      <WatchlistPanel seed={{ registration_no: registration, colour, vtype, make, model }} />
+    </section>
+  )
+}
+
+function WatchlistPanel({ seed }) {
+  const [entries, setEntries] = useState(null)
+  const [draft, setDraft] = useState(EMPTY_ENTRY)
+  const [adding, setAdding] = useState(false)
+  const [confirming, setConfirming] = useState(null)
+  const [removing, setRemoving] = useState(null)
+  const [error, setError] = useState(null)
+  const [notice, setNotice] = useState(null)
+
+  const load = () =>
+    api
+      .watchlist()
+      .then(setEntries)
+      .catch((e) => setError(e.message))
+  useEffect(() => {
+    load()
+  }, [])
+
+  const edit = (key) => (e) => setDraft((d) => ({ ...d, [key]: e.target.value }))
+  const hasTarget = WATCH_TARGETS.some((k) => draft[k].trim())
+  const seedHasTarget = WATCH_TARGETS.some((k) => seed[k].trim())
+
+  async function add(e) {
+    e.preventDefault()
+    setAdding(true)
+    setError(null)
+    setNotice(null)
+    // Blank optional fields go as null, not as empty-string match criteria.
+    const body = Object.fromEntries(Object.entries(draft).map(([k, v]) => [k, v.trim() || null]))
+    try {
+      const { backfill } = await api.addWatchlist(body)
+      setNotice(
+        `Added "${body.label}". History check found ${backfill.route_count} route(s) over ` +
+          `${backfill.lookback_days} days and raised ${backfill.alerts_raised} alert(s).`,
+      )
+      setDraft(EMPTY_ENTRY)
+      load()
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setAdding(false)
+    }
+  }
+
+  async function remove(entry) {
+    // Removal stops live alerting, so it takes a second click.
+    if (confirming !== entry.id) return setConfirming(entry.id)
+    setConfirming(null)
+    setRemoving(entry.id)
+    setError(null)
+    setNotice(null)
+    try {
+      await api.removeWatchlist(entry.id)
+      setEntries((list) => list.filter((w) => w.id !== entry.id))
+      setNotice(`Removed "${entry.label}" from the watchlist.`)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setRemoving(null)
+    }
+  }
+
+  return (
+    <section className="panel search-mode watchlist-panel">
+      <div className="mode-strip" />
+      <header>
+        <div className="section-kicker">C / Watchlist</div>
+        <h2>Standing watch</h2>
+        <p className="muted">
+          Every new detection is checked against active entries. Adding an entry also searches
+          recorded history. Give a plate or at least one vehicle attribute.
+        </p>
+      </header>
+      <form onSubmit={add} className="search-filters-form">
+        <div className="search-filters-grid">
+          <label className="field">
+            <span className="data-label">Label</span>
+            <input
+              required
+              placeholder="e.g. Stolen white Swift"
+              value={draft.label}
+              onChange={edit('label')}
+            />
+          </label>
+          <label className="field">
+            <span className="data-label">Reason</span>
+            <input
+              required
+              placeholder="e.g. FIR 214/2026"
+              value={draft.reason}
+              onChange={edit('reason')}
+            />
+          </label>
+          <label className="field">
+            <span className="data-label">Registration number</span>
+            <input
+              placeholder="e.g. GJ 01 AB 1234"
+              value={draft.registration_no}
+              onChange={edit('registration_no')}
+            />
+          </label>
+          <OptionSelect
+            label="Colour"
+            anyLabel="Any colour"
+            options={COLOURS}
+            value={draft.colour}
+            onChange={edit('colour')}
+          />
+          <OptionSelect
+            label="Vehicle type"
+            anyLabel="Any type"
+            options={VTYPES}
+            value={draft.vtype}
+            onChange={edit('vtype')}
+          />
+          <OptionSelect
+            label="Make"
+            anyLabel="Any make"
+            options={MAKES}
+            value={draft.make}
+            onChange={edit('make')}
+          />
+          <label className="field">
+            <span className="data-label">Model</span>
+            <input placeholder="e.g. swift" value={draft.model} onChange={edit('model')} />
+          </label>
+          <label className="field">
+            <span className="data-label">Priority</span>
+            <select value={draft.priority} onChange={edit('priority')}>
+              <option value="review">Review</option>
+              <option value="priority">Priority</option>
+            </select>
+          </label>
+        </div>
+        <div className="search-actions">
+          <button
+            type="button"
+            onClick={() => setDraft((d) => ({ ...d, ...seed }))}
+            disabled={!seedHasTarget}
+          >
+            Use search details
+          </button>
+          <button
+            className="primary"
+            disabled={adding || !draft.label.trim() || !draft.reason.trim() || !hasTarget}
+          >
+            {adding ? 'Checking history…' : 'Add to watchlist'}
+          </button>
+        </div>
+      </form>
+
+      {(error || notice) && (
+        <p className={`watchlist-message ${error ? 'is-error' : ''}`} role="status">
+          {error || notice}
+        </p>
+      )}
+
+      <div className="watchlist-list">
+        <div className="workspace-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Label</th>
+                <th>Target</th>
+                <th>Priority</th>
+                <th>Reason</th>
+                <th>Added</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {entries?.map((w) => (
+                <tr key={w.id}>
+                  <td>{w.label}</td>
+                  <td>
+                    {[w.registration_no, w.colour, w.make, w.model, w.vtype]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </td>
+                  <td>
+                    <span className={`tier ${w.priority}`}>{w.priority}</span>
+                  </td>
+                  <td className="muted">{w.reason}</td>
+                  <td className="muted">
+                    {w.created_by_name} · {new Date(w.created_at).toLocaleString()}
+                  </td>
+                  <td>
+                    <button
+                      className="danger-action"
+                      disabled={removing === w.id}
+                      onClick={() => remove(w)}
+                      onBlur={() => setConfirming(null)}
+                    >
+                      {removing === w.id
+                        ? 'Removing…'
+                        : confirming === w.id
+                          ? 'Confirm remove'
+                          : 'Remove'}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {entries?.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="muted">
+                    No active watchlist entries.
+                  </td>
+                </tr>
+              )}
+              {entries === null && !error && (
+                <tr>
+                  <td colSpan={6} className="muted">
+                    Loading watchlist…
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </section>
   )
 }

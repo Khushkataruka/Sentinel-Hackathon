@@ -2371,6 +2371,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "sentinel-core" },
     { name = "sentinel-correlation" },
+    { name = "sentinel-ingest" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -2379,6 +2380,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115" },
     { name = "sentinel-core", editable = "packages/sentinel-core" },
     { name = "sentinel-correlation", editable = "packages/sentinel-correlation" },
+    { name = "sentinel-ingest", editable = "packages/sentinel-ingest" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
 ]
 

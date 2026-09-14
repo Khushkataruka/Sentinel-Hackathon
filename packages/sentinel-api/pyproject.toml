@@ -3,7 +3,7 @@ name = "sentinel-api"
 version = "0.1.1"
 description = "FastAPI entrypoints for UI and integration"
 requires-python = ">=3.11"
-dependencies = ["sentinel-core", "sentinel-correlation", "fastapi>=0.115", "uvicorn[standard]>=0.30"]
+dependencies = ["sentinel-core", "sentinel-correlation", "sentinel-ingest", "fastapi>=0.115", "uvicorn[standard]>=0.30"]
 
 [project.scripts]
 sentinel-api = "sentinel.api.__main__:main"
@@ -11,6 +11,7 @@ sentinel-api = "sentinel.api.__main__:main"
 [tool.uv.sources]
 sentinel-core = { workspace = true }
 sentinel-correlation = { workspace = true }
+sentinel-ingest = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import Hls from 'hls.js'
+import AnnotatedFeed from './AnnotatedFeed'
 import './operator-components.css'
 
 export default function VideoPlayer({ cameraId, title }) {
@@ -7,10 +8,11 @@ export default function VideoPlayer({ cameraId, title }) {
   const [status, setStatus] = useState('loading')
   const [error, setError] = useState(null)
   const [attempt, setAttempt] = useState(0)
+  const [mode, setMode] = useState('raw')
 
   useEffect(() => {
     const video = videoRef.current
-    if (!video || !cameraId) return
+    if (mode !== 'raw' || !video || !cameraId) return
     let active = true
     let hls
     let recovered = false
@@ -74,7 +76,7 @@ export default function VideoPlayer({ cameraId, title }) {
       video.removeAttribute('src')
       video.load()
     }
-  }, [cameraId, attempt])
+  }, [cameraId, attempt, mode])
 
   const label = {
     loading: 'CONNECTING',
@@ -87,45 +89,63 @@ export default function VideoPlayer({ cameraId, title }) {
     <div className="sentinel-player">
       <div className="player-header">
         <strong>{title || cameraId}</strong>
-        <span className={`player-status ${status === 'playing' ? 'is-live' : ''}`}>
+        <span
+          className={`player-status ${mode === 'raw' && status === 'playing' ? 'is-live' : ''}`}
+        >
           <i aria-hidden="true" />
-          {label}
+          {mode === 'annotated' ? 'ANNOTATED' : label}
         </span>
       </div>
-      <div className="player-stage">
-        <video
-          ref={videoRef}
-          muted
-          playsInline
-          controls
-          aria-label={`${title || cameraId} camera feed`}
-        />
-        {status === 'loading' && (
-          <div className="player-overlay" role="status">
-            <div className="player-spinner" aria-hidden="true" />
-            <p>Establishing video connection</p>
-          </div>
-        )}
-        {error && (
-          <div className="player-overlay" role="status">
-            <svg
-              width="25"
-              height="25"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.4"
-              aria-hidden="true"
-            >
-              <path d="M4 7h11v10H4zM15 10l5-3v10l-5-3M3 3l18 18" />
-            </svg>
-            <p>{error}</p>
-            <button type="button" onClick={() => setAttempt((value) => value + 1)}>
-              Reconnect feed ↻
-            </button>
-          </div>
-        )}
+      <div className="player-mode-switch" aria-label="Camera playback mode">
+        <button type="button" aria-pressed={mode === 'raw'} onClick={() => setMode('raw')}>
+          Live
+        </button>
+        <button
+          type="button"
+          aria-pressed={mode === 'annotated'}
+          onClick={() => setMode('annotated')}
+        >
+          Annotated · ~1 min delay
+        </button>
       </div>
+      {mode === 'annotated' ? (
+        <AnnotatedFeed key={cameraId} cameraId={cameraId} title={title} />
+      ) : (
+        <div className="player-stage">
+          <video
+            ref={videoRef}
+            muted
+            playsInline
+            controls
+            aria-label={`${title || cameraId} camera feed`}
+          />
+          {status === 'loading' && (
+            <div className="player-overlay" role="status">
+              <div className="player-spinner" aria-hidden="true" />
+              <p>Establishing video connection</p>
+            </div>
+          )}
+          {error && (
+            <div className="player-overlay" role="status">
+              <svg
+                width="25"
+                height="25"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                aria-hidden="true"
+              >
+                <path d="M4 7h11v10H4zM15 10l5-3v10l-5-3M3 3l18 18" />
+              </svg>
+              <p>{error}</p>
+              <button type="button" onClick={() => setAttempt((value) => value + 1)}>
+                Reconnect feed ↻
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -27,6 +27,7 @@ from sentinel.ingest import bestframe, writer
 from sentinel.ingest.adapters.base import Adapter, AdapterError
 from sentinel.ingest.decode import CameraStream, Frame
 from sentinel.ingest.detect import VEHICLE_CLASSES, Detector, load_detector
+from sentinel.ingest.live import LivePublisher
 from sentinel.ingest.track import ByteTrack, Track
 from sentinel.ingest.traffic import TrafficAccumulator
 
@@ -85,6 +86,10 @@ class CameraWorker:
         #: track, the best one -- so anything that needs to replay a frame's
         #: geometry has to take it here or not at all.
         self.observer = observer
+        self.publisher = (
+            LivePublisher(camera_id) if not once and settings.annotated_feed_enabled else None
+        )
+        self._last_publish_error = 0.0
 
         self.gating: writer.Gating | None = None
         self.tracker: ByteTrack | None = None
@@ -382,6 +387,18 @@ class CameraWorker:
                 active, finished = self.tracker.update(detections, frame.dt_s, frame.pts_s)
                 if self.observer is not None:
                     self.observer(frame, active, self)
+                if self.publisher is not None:
+                    try:
+                        await loop.run_in_executor(
+                            None, self.publisher.publish, frame, active, self
+                        )
+                    except Exception as exc:
+                        # A full media volume must not stop tracking/sightings.
+                        if time.monotonic() - self._last_publish_error > 30:
+                            log.warning(
+                                "annotated_publish_failed", camera=self.camera_id, error=str(exc)
+                            )
+                            self._last_publish_error = time.monotonic()
                 if finished:
                     await self._flush_tracks(finished, frame)
 
