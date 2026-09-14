@@ -57,7 +57,8 @@ export const api = {
   // evidence
   evidence: (readId) => request(`/evidence/${readId}`),
   frames: (params) => request(`/frames${params}`),
-  mediaUrl: (kind, ref) => `/media/${kind}/${ref}`,
+  // Stored references already include the kind and camera/date/hour folders.
+  mediaUrl: (ref) => ref ? `/media/${ref.split('/').map(encodeURIComponent).join('/')}` : undefined,
   sightings: (params = '') => request(`/live_sightings${params}`),
 
   // watchlist
