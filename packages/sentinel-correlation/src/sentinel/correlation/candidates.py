@@ -185,7 +185,7 @@ async def by_caption(
                    COALESCE(p.trust_level, 0.5) AS trust_level
               FROM sightings s
               LEFT JOIN camera_profiles p ON p.camera_id = s.camera_id
-             WHERE s.caption IS NOT NULL AND s.caption %% $1
+             WHERE s.caption IS NOT NULL AND s.caption % $1
                AND ($2::timestamptz IS NULL OR s.seen_at >= $2)
                AND ($3::timestamptz IS NULL OR s.seen_at <= $3)
              ORDER BY sim DESC

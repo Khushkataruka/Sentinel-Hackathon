@@ -2339,6 +2339,9 @@ export = [
 models = [
     { name = "onnxruntime" },
 ]
+violations = [
+    { name = "ultralytics" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -2356,12 +2359,13 @@ requires-dist = [
     { name = "sentinel-registry", editable = "packages/sentinel-registry" },
     { name = "ultralytics", marker = "extra == 'anpr'", specifier = ">=8.2" },
     { name = "ultralytics", marker = "extra == 'export'", specifier = ">=8.2" },
+    { name = "ultralytics", marker = "extra == 'violations'", specifier = ">=8.2" },
 ]
-provides-extras = ["dev", "models", "export", "anpr"]
+provides-extras = ["dev", "models", "export", "anpr", "violations"]
 
 [[package]]
 name = "sentinel-api"
-version = "0.1.0"
+version = "0.1.1"
 source = { editable = "packages/sentinel-api" }
 dependencies = [
     { name = "fastapi" },
@@ -2401,7 +2405,7 @@ requires-dist = [
 
 [[package]]
 name = "sentinel-correlation"
-version = "0.1.0"
+version = "0.1.1"
 source = { editable = "packages/sentinel-correlation" }
 dependencies = [
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },

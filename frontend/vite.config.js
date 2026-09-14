@@ -27,7 +27,8 @@ export default defineConfig({
       '/health': 'http://localhost:8000',
       '/import': 'http://localhost:8000',
       '/sync': 'http://localhost:8000',
-      '/stream': 'http://localhost:8000'
+      '/stream': 'http://localhost:8000',
+      '/live_sightings': 'http://localhost:8001',
     }
   }
 })
