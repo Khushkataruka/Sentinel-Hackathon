@@ -55,7 +55,14 @@ export default function ViolationsPage() {
                 <td className="muted">{new Date(v.seen_at).toLocaleString()}</td>
                 <td>{v.confidence?.toFixed(2)}</td>
                 <td>{v.trust_level?.toFixed(2)}</td>
-                <td>{[v.colour, v.make, v.model].filter(Boolean).join(' ') || v.class}</td>
+                <td>
+                  <img
+                    src={api.mediaUrl(v.crop_ref)}
+                    alt="Vehicle crop"
+                    style={{ height: '40px', width: 'auto', marginRight: '8px', verticalAlign: 'middle' }}
+                  />
+                  {[v.colour, v.make, v.model].filter(Boolean).join(' ') || v.class}
+                </td>
                 {/* Seatbelt and phone use need to resolve a small object
                     through a windscreen at pole distance. Flagged, because a
                     reviewer should know before they judge the image. */}

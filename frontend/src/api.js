@@ -14,6 +14,7 @@ async function request(path, options = {}) {
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      'Accept': 'application/json',
       [USER_HEADER]: currentUser(),
       ...(options.headers || {})
     }

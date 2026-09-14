@@ -86,7 +86,7 @@ class Settings(BaseSettings):
     plate_detect_model_path: Path = Path("./var/models/plate_detect.onnx")
     plate_ocr_model_path: Path = Path("./var/models/plate_ocr.onnx")
 
-    vllm_url: str = ""
+    vllm_url: str = "http://host.docker.internal:8008"
     vllm_model: str = "google/gemma-3-27b-it"
     # Leave room for multi-paragraph <thinking> followed by all XML fields.
     vllm_max_tokens: int = Field(4096, ge=1)
