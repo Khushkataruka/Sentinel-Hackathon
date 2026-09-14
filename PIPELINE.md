@@ -101,6 +101,10 @@ All settings are `SENTINEL_`-prefixed and read from `.env`
 | `SENTINEL_TARGET_DECODE_FPS` | `10.0` | the analysis rate. Also the frame rate of the annotated video. |
 | `SENTINEL_DETECT_CONF` | `0.35` | raise it if the video is full of false boxes, lower it if vehicles are missed. |
 | `SENTINEL_DETECT_MODEL_PATH` | `./var/models/yolo.onnx` | see §3. |
+| `SENTINEL_VLLM_URL` | empty | Enables the remote captioner. For vLLM on the Docker Desktop host at :8008, use `http://host.docker.internal:8008`; native processes use `http://localhost:8008`. |
+| `SENTINEL_VLLM_MODEL` | `google/gemma-3-27b-it` | Must match an ID returned by the server's `/v1/models`. |
+| `SENTINEL_VLLM_MAX_TOKENS` | `4096` | Output budget for the full XML response, including multi-paragraph thinking. |
+| `SENTINEL_VLLM_TIMEOUT_S` | `120` | HTTP inference timeout; failed requests go through the queue's retry handling. |
 | `SENTINEL_ONNX_PROVIDERS` | `["CPUExecutionProvider"]` | `["CUDAExecutionProvider","CPUExecutionProvider"]` on a GPU box. |
 | `SENTINEL_LOG_LEVEL` | `INFO` | `DEBUG` puts per-frame decisions in `run.log`. |
 
@@ -137,11 +141,62 @@ violation stubs in place. Everything else in the table is a manual drop.
 | **Vehicle detect** | `var/models/yolo.onnx` | `ingest/detect.py:242` `load_detector` | `NullDetector` → **zero sightings, and therefore nothing downstream at all** |
 | **Plate detect + OCR** | `var/models/license-plate-finetune-v1m.pt` (or `-v1n.pt`, or `plate_detect.pt`) | `pipelines/models/anpr.py:410` `load_plate_reader` | `StubPlateReader` — returns a plate for one crop in eight, deliberately |
 | **Re-ID / appearance** | `var/models/reid.onnx` | `pipelines/models/reid.py:120` `load_reid` | `StubReID` — a random projection of a thumbnail. Cross-camera matching is then noise. |
-| **Caption** | `var/models/caption.onnx` | `pipelines/models/captioner.py:170` `load_captioner` | `StubCaptioner`, output prefixed `[stub]` |
+| **Caption** | `SENTINEL_VLLM_URL` for vLLM; `var/models/caption.onnx` is still unimplemented | `pipelines/models/captioner.py` `load_captioner` | `StubCaptioner`, output prefixed `[stub]`, when vLLM is not configured |
 | **Caption embed** | `var/models/caption_embed.onnx` | `pipelines/models/captioner.py:180` | **always the stub** — the ONNX branch is not wired up (see §5) |
 | **Rider / helmet** | `var/models/helmet_merged_yolo11m_best.pt` *(fetched)* | `pipelines/models/violations.py:402` `load_rider_detector` | `StubRiderDetector` — one or two placeholder rider boxes per two-wheeler |
 | **Phone** | `var/models/phone_v2_yolo11m_best.pt` *(fetched)* | `pipelines/models/violations.py:415` `load_violation_detector` | `phone_use` never fires; the rest of the real path still runs |
 | **Violation** | (both of the above) | same loader | `StubViolationDetector` — fires any permitted type at random, temporal ones included |
+
+### vLLM vehicle descriptions
+
+`DescribeWorker` selects vLLM whenever `SENTINEL_VLLM_URL` is set. It sends the
+vehicle crop as a JPEG data URL to `/v1/chat/completions`, preceded by three
+user/assistant examples for a car, motorcycle, and autorickshaw. The examples
+use textual descriptions of visible details to teach the format; the final
+turn contains the actual crop image. Edit `models/caption_prompt.py` to change
+the examples.
+
+The response contract is:
+
+```xml
+<image>
+  <thinking>Visible evidence and uncertainty can span multiple paragraphs.
+
+Additional observations can continue here.</thinking>
+  <type>car</type>
+  <colour>white</colour>
+  <make/>
+  <model/>
+  <features><feature>roof rack</feature></features>
+  <caption>A white car with a roof rack.</caption>
+</image>
+```
+
+Empty fields mean the image does not support an identification. `<type>` maps
+to the existing `vtype` column; the camera's permitted attributes still gate
+the saved fields. `<thinking>` is accepted as multiline XML text and is not
+stored as the caption or included in its embedding. Malformed or truncated
+XML and HTTP failures retry through the job queue instead of completing with
+an empty description. The caption embedder remains a stub.
+
+For vLLM running on the Docker Desktop host at port 8008, set this in `.env`:
+
+```dotenv
+SENTINEL_VLLM_URL=http://host.docker.internal:8008
+SENTINEL_VLLM_MODEL=google/gemma-3-27b-it
+```
+
+Use the model ID actually served by `/v1/models` if it differs. Rebuild and
+recreate the pipelines container to pick up both code and environment changes:
+
+```bash
+docker compose up -d --build --no-deps pipelines
+docker compose logs --tail=100 pipelines
+```
+
+The `vllm_captioner_enabled` startup log confirms selection of the remote
+captioner, not server connectivity. New queued description jobs use it;
+already completed stub descriptions are not automatically reprocessed.
 
 ### The contract each one has to satisfy
 

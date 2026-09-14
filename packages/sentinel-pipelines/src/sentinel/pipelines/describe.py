@@ -12,6 +12,7 @@ express. That search path did not exist before the caption did.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import numpy as np
@@ -46,7 +47,8 @@ class DescribeWorker(PipelineWorker):
         vehicle_class = job.payload.get("class", "car")
         permitted = job.payload.get("permitted_attributes", [])
 
-        description = self.captioner(crop, vehicle_class)
+        # Network inference must not block the other pipelines sharing this loop.
+        description = await asyncio.to_thread(self.captioner, crop, vehicle_class)
         # The camera's survey decides what may be recorded, not the model.
         description = description.restrict_to(permitted)
 
