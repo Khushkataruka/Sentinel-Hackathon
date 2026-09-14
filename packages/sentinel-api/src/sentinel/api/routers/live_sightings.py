@@ -3,9 +3,9 @@ from __future__ import annotations
 from fastapi import APIRouter, Query
 from sentinel.api.deps import DbConn, User
 
-router = APIRouter(tags=["sightings"])
+router = APIRouter(tags=["live_sightings"])
 
-@router.get("/sightings")
+@router.get("/live_sightings")
 async def get_sightings(
     conn: DbConn,
     user: User,

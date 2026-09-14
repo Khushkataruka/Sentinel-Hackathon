@@ -82,11 +82,11 @@ Without docker:
 ```bash
 make install                  # uv sync --all-extras
 make db-up && make seed
-uv run sentinel-registry serve
-uv run sentinel-ingest run
-uv run sentinel-pipeline run --all
-uv run sentinel-correlation run
-uv run sentinel-api           # :8001
+python3 -m uv run sentinel-registry serve
+python3 -m uv run sentinel-ingest run
+python3 -m uv run sentinel-pipeline run --all
+python3 -m uv run sentinel-correlation run
+python3 -muv run sentinel-api           # :8001
 ```
 
 ### Onboarding the sandbox cameras
