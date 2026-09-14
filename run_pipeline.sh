@@ -33,7 +33,8 @@ usage: ./run_pipeline.sh [options] VIDEO [VIDEO...]
   --manifest FILE     JSON giving each video a camera_id, name, lat, lon, start_at
   --fps N             analysis frame rate                 (default: SENTINEL_TARGET_DECODE_FPS)
   --max-seeds N       sightings to correlate from         (default: 50)
-  --no-fetch-models   fail rather than download a detector when none is present
+  --no-fetch-models   fail rather than download a detector when none is present,
+                      and leave the violation weights unfetched (stubs instead)
   --keep-sightings    add to previous runs instead of replacing them
   -h, --help          this
 
@@ -235,6 +236,49 @@ if compgen -G "$MODELS_DIR/*plate*.pt" >/dev/null 2>&1; then
 else
   warn "no plate weights in $MODELS_DIR: plates stay stubbed (1 crop in 8, marked)."
   warn "drop license-plate-finetune-v1m.pt there and re-run. See PIPELINE.md §3."
+fi
+
+# Violation weights: helmet (rider / helmet / no_helmet) and phone. Pulled as
+# two files rather than cloned -- the source repo is ~280 MB, and even a
+# blobless sparse clone drags ~158 MB across to get these two out of it.
+#
+# Pinned to a commit, not a branch. These are somebody else's weights in
+# somebody else's repository: against main, an upstream retrain would swap the
+# detector under a running estate with nothing in the logs to say so. Moving
+# the pin is then a reviewable one-line change, which is what it should be.
+VIOLATION_WEIGHTS_COMMIT="7e289072c8a9ffa7d1226ad3bba82673c115abbd"
+VIOLATION_WEIGHTS_BASE="https://raw.githubusercontent.com/Sunand-Sriram/DRISHTI-Flipkart-gridlock-round-2/$VIOLATION_WEIGHTS_COMMIT/drishti/models"
+HELMET_WEIGHTS="helmet_merged_yolo11m_best.pt"
+PHONE_WEIGHTS="phone_v2_yolo11m_best.pt"
+
+have_weights() {   # name -> present on disk afterwards?
+  local w="$1"
+  [[ -f "$MODELS_DIR/$w" ]] && return 0
+  [[ $FETCH_MODELS -eq 1 ]] || return 1
+  info "fetching $w (~40 MB) — first run only"
+  # Land it as .part and move on success. An interrupted download must not
+  # leave a truncated .pt behind: the loader checks that the file exists, not
+  # that it parses, so a half-file would fail at load instead of degrading.
+  if curl -fL --retry 2 -o "$MODELS_DIR/$w.part" "$VIOLATION_WEIGHTS_BASE/$w" >>"$LOG" 2>&1; then
+    mv "$MODELS_DIR/$w.part" "$MODELS_DIR/$w"
+    return 0
+  fi
+  rm -f "$MODELS_DIR/$w.part"
+  warn "could not fetch $w (see $LOG)"
+  return 1
+}
+
+# Mirrors load_violation_detector: the helmet weights gate the real path,
+# because the rider boxes are its main input. Phone is optional on top.
+if have_weights "$HELMET_WEIGHTS"; then
+  if have_weights "$PHONE_WEIGHTS"; then
+    info "violation weights present — real no_helmet / triple_riding / phone_use"
+  else
+    warn "helmet weights only: no_helmet and triple_riding are real, phone_use will not fire."
+  fi
+else
+  warn "no helmet weights in $MODELS_DIR: violations stay stubbed — random findings,"
+  warn "temporal types included. See PIPELINE.md §3."
 fi
 
 # ============================================================================

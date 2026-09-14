@@ -126,6 +126,12 @@ file is a quiet log line and a plausible-looking wrong answer — not an error.
 
 Default directory: `var/models/`.
 
+Two of them arrive on their own. `run_pipeline.sh` fetches the helmet and
+phone weights (~40 MB each) on the first run that finds them absent, pinned to
+a commit rather than a branch so an upstream retrain cannot swap a detector
+under a running estate. `--no-fetch-models` skips the download and leaves the
+violation stubs in place. Everything else in the table is a manual drop.
+
 | Role | Put the file at | Loader | What happens without it |
 |---|---|---|---|
 | **Vehicle detect** | `var/models/yolo.onnx` | `ingest/detect.py:242` `load_detector` | `NullDetector` → **zero sightings, and therefore nothing downstream at all** |
@@ -133,7 +139,9 @@ Default directory: `var/models/`.
 | **Re-ID / appearance** | `var/models/reid.onnx` | `pipelines/models/reid.py:120` `load_reid` | `StubReID` — a random projection of a thumbnail. Cross-camera matching is then noise. |
 | **Caption** | `var/models/caption.onnx` | `pipelines/models/captioner.py:170` `load_captioner` | `StubCaptioner`, output prefixed `[stub]` |
 | **Caption embed** | `var/models/caption_embed.onnx` | `pipelines/models/captioner.py:180` | **always the stub** — the ONNX branch is not wired up (see §5) |
-| **Rider / violation** | — | `pipelines/models/violations.py:154,158` | **stub only; there is no real path yet** (see §5) |
+| **Rider / helmet** | `var/models/helmet_merged_yolo11m_best.pt` *(fetched)* | `pipelines/models/violations.py:402` `load_rider_detector` | `StubRiderDetector` — one or two placeholder rider boxes per two-wheeler |
+| **Phone** | `var/models/phone_v2_yolo11m_best.pt` *(fetched)* | `pipelines/models/violations.py:415` `load_violation_detector` | `phone_use` never fires; the rest of the real path still runs |
+| **Violation** | (both of the above) | same loader | `StubViolationDetector` — fires any permitted type at random, temporal ones included |
 
 ### The contract each one has to satisfy
 
@@ -331,9 +339,23 @@ Things that are true right now, deliberately or otherwise.
   `SENTINEL_CAPTION_EMBED_MODEL_PATH` setting is currently dead — the ONNX
   branch was never wired up. Free-text caption search runs on hashed
   bag-of-words until it is.
-- **There is no real violation detector.** `no_helmet` and `triple_riding` are
-  permitted and gated correctly all the way to the database trigger, but the
-  only implementation is a stub. This is the largest genuinely missing piece.
+- **Three of the seven violation types have a real detector.** `no_helmet`,
+  `triple_riding` and `phone_use` run on YOLO11m weights over the vehicle
+  crop. The other four do not, and will not from a crop alone:
+  `wrong_way`, `red_light` and `illegal_parking` need a track across frames
+  (and two of them a signal head or stop line in view), while `no_seatbelt`
+  has no detector because the available weights carry one class, `seat_belt`
+  — absence of a seatbelt box is evidence the belt did not resolve through
+  the windscreen, not evidence of an unbelted driver. Each unsupported but
+  permitted type is named once per worker in a `violation_type_unsupported`
+  log line. **With the weights in place those four stop producing rows**;
+  the stub fabricates them, the real detector does not.
+- **The real detectors need crops the sample footage does not contain.** They
+  skip any crop whose longest side is under `SENTINEL_VIOLATION_MIN_CROP_PX`
+  (96), recording `violation_status = 'skipped'` rather than a zero that
+  reads as "assessed, nothing found". The bundled 480x360 video yields crops
+  with a median of 47x35, so every one of them skips. This is the footage,
+  not the wiring: on 1080p estate video the crops clear the floor.
 - **A mid-file decode error ends the pass.** A file's failed read is treated
   as end-of-file, because for a local file it almost always is. `run.json`
   reports `frames_decoded`, so a truncated pass is visible rather than silent.

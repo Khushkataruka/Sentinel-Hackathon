@@ -37,6 +37,7 @@ from sentinel.core import audit
 from sentinel.core.config import settings
 from sentinel.core.db import acquire, transaction
 from sentinel.core.logging import get_logger
+from sentinel.core.types import ALL_ATTRIBUTES
 from sentinel.ingest.adapters.builtin.filesrc import FileAdapter
 from sentinel.ingest.decode import Frame
 from sentinel.ingest.detect import load_detector
@@ -63,11 +64,10 @@ ORIGIN_LON = 72.5714
 #: What an offline camera's profile permits. Deliberately not the section 6
 #: survey -- see `distortion` below, which says so in the row itself.
 #:
-#: `plate_viable` is true because the point of an offline run is to exercise
-#: ANPR on footage chosen for it. Violations are limited to the two types that
-#: need neither glass penetration nor scene context: nothing here knows where
-#: the stop line is.
-PERMITTED_ATTRIBUTES = ["colour", "type", "make", "model"]
+#: The full grant, same as every other camera: see ALL_ATTRIBUTES in
+#: sentinel.core.types. `plate_viable` is true because the point of an offline
+#: run is to exercise ANPR on footage chosen for it.
+PERMITTED_ATTRIBUTES = list(ALL_ATTRIBUTES)
 
 
 @dataclass
@@ -222,20 +222,17 @@ async def ensure_profile(conn: asyncpg.Connection, spec: VideoSpec) -> None:
 
     Not the section 6 survey, and the row says so: `distortion.survey` carries
     the disclaimer, the same way `scripts/survey.py` marks its provisional
-    rows. Violations are restricted to the types that need neither glass
-    penetration nor scene context -- there is no stop line or signal head to
-    reason about in an arbitrary clip, and the database trigger would reject
-    the rest anyway.
+    rows.
+
+    Every enabled violation type is permitted, including the ones needing
+    glass penetration or scene context. An arbitrary clip has no stop line or
+    signal head to reason about, so `red_light` and `wrong_way` findings here
+    rest on nothing measured; they are enabled because the grant is uniform,
+    not because the footage supports them.
     """
     violations = [
         r["code"] for r in await conn.fetch(
-            """
-            SELECT code FROM violation_types
-             WHERE enabled
-               AND NOT needs_glass_penetration
-               AND NOT needs_scene_context
-             ORDER BY code
-            """
+            "SELECT code FROM violation_types WHERE enabled ORDER BY code"
         )
     ]
 
