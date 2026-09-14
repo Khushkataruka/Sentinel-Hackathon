@@ -62,11 +62,19 @@ export const api = {
     request('/search/registration', {
       method: 'POST',
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(60000),
     }),
   searchDescription: (body) =>
     request('/search/description', {
       method: 'POST',
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(60000),
+    }),
+  searchSighting: (readId, body = {}) =>
+    request(`/search/sighting/${readId}`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(60000),
     }),
   routesForSearch: (id) => request(`/searches/${id}/routes`),
   route: (id) => request(`/routes/${id}`),

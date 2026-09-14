@@ -31,6 +31,11 @@ class DescriptionSearch(BaseModel):
     camera_ids: list[str] | None = None
 
 
+class SightingSearch(BaseModel):
+    since: datetime | None = None
+    until: datetime | None = None
+
+
 @router.post("/search/registration")
 async def by_registration(body: RegistrationSearch, conn: DbTxn, user: User):
     """Search by registration number.
@@ -75,6 +80,22 @@ async def by_description(body: DescriptionSearch, conn: DbTxn, user: User):
         district=body.district,
     )
     return result.as_dict()
+
+
+@router.post("/search/sighting/{read_id}")
+async def by_sighting(read_id: uuid.UUID, body: SightingSearch, conn: DbTxn, user: User):
+    """Search for routes using an existing sighting as the query."""
+    try:
+        result = await search_lib.by_sighting(
+            conn,
+            read_id,
+            since=body.since,
+            until=body.until,
+            requested_by=uuid.UUID(user.id),
+        )
+        return result.as_dict()
+    except ValueError as e:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(e))
 
 
 @router.get("/searches/{search_id}/routes")

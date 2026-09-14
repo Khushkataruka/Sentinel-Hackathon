@@ -43,6 +43,7 @@ class SearchResult:
     candidates: list[Candidate] = field(default_factory=list)
     routes: list[dict[str, Any]] = field(default_factory=list)
     rejected_legs: int = 0
+    candidate_details: list[dict[str, Any]] = field(default_factory=list)
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -53,6 +54,7 @@ class SearchResult:
             "route_count": len(self.routes),
             "rejected_leg_count": self.rejected_legs,
             "routes": self.routes,
+            "sightings": self.candidate_details,
         }
 
 
@@ -146,6 +148,42 @@ async def run(
 
     merged = cand.merge(*groups)[: settings.candidate_limit]
 
+    # Fetch full sighting details for each candidate, so the frontend can
+    # show crop images, vehicle attributes, and match scores.
+    candidate_details: list[dict[str, Any]] = []
+    if merged:
+        read_ids = [c.read_id for c in merged]
+        score_map = {c.read_id: c for c in merged}
+        detail_rows = await conn.fetch(
+            """
+            SELECT s.read_id, s.camera_id, s.seen_at, s.colour, s.vtype,
+                   s.make, s.model, s.caption, s.crop_ref, s.plate_text,
+                   c.name AS camera_name
+              FROM sightings s
+              JOIN cameras c ON c.camera_id = s.camera_id
+             WHERE s.read_id = ANY($1)
+             ORDER BY s.seen_at DESC
+            """,
+            read_ids,
+        )
+        for r in detail_rows:
+            c = score_map.get(r["read_id"])
+            candidate_details.append({
+                "read_id": str(r["read_id"]),
+                "camera_id": r["camera_id"],
+                "camera_name": r["camera_name"],
+                "seen_at": r["seen_at"].isoformat() if r["seen_at"] else None,
+                "colour": r["colour"],
+                "type": r["vtype"],
+                "make": r["make"],
+                "model": r["model"],
+                "caption": r["caption"],
+                "crop_ref": r["crop_ref"],
+                "plate_text": r["plate_text"],
+                "score": round(c.score, 4) if c else 0,
+                "matched_on": c.matched_on if c else [],
+            })
+
     # Steps 6 and 7.
     built, rejected = await route_builder.enumerate_routes(conn, merged)
     scored = scoring.rank(built, rarity_count)
@@ -158,6 +196,7 @@ async def run(
         description=description,
         rarity_count=rarity_count,
         candidates=merged,
+        candidate_details=candidate_details,
         rejected_legs=len(rejected),
         routes=[
             {
@@ -218,4 +257,42 @@ async def by_registration(
         until=until,
         requested_by=requested_by,
         district=description.district,
+    )
+
+
+async def by_sighting(
+    conn: asyncpg.Connection,
+    read_id: uuid.UUID,
+    *,
+    since: datetime | None = None,
+    until: datetime | None = None,
+    requested_by: uuid.UUID | None = None,
+) -> SearchResult:
+    """Search for routes using an existing sighting as the query."""
+    row = await conn.fetchrow(
+        """
+        SELECT colour, vtype, make, model, plate_text, embedding
+          FROM sightings WHERE read_id = $1
+        """,
+        read_id,
+    )
+    if not row:
+        raise ValueError(f"Sighting not found: {read_id}")
+
+    description = VehicleDescription(
+        colour=row["colour"],
+        vtype=row["vtype"],
+        make=row["make"],
+        model=row["model"],
+        registration_no=row["plate_text"],
+        embedding=row["embedding"],
+    )
+
+    return await run(
+        conn,
+        description,
+        kind=SearchKind.DESCRIPTION,
+        since=since,
+        until=until,
+        requested_by=requested_by,
     )

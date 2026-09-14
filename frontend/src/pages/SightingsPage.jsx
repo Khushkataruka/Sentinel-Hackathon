@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../api.js'
 import './workspace.css'
 import EvidenceImage from '../components/EvidenceImage.jsx'
 
 export default function SightingsPage() {
+  const navigate = useNavigate()
   const [sightings, setSightings] = useState([])
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -114,6 +116,14 @@ export default function SightingsPage() {
                       <strong>Observed</strong>{' '}
                       {sighting.seen_at && new Date(sighting.seen_at).toLocaleString()}
                     </span>
+                  </div>
+                  <div style={{ marginTop: '12px' }}>
+                    <button 
+                      onClick={() => navigate(`/search?sighting=${sighting.read_id}`)}
+                      className="secondary"
+                    >
+                      🔍 Find Routes
+                    </button>
                   </div>
                 </div>
               </article>
