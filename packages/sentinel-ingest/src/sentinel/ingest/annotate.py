@@ -446,6 +446,12 @@ def _remux(src: Path, dst: Path) -> bool:
     almost everything, including the browser this ends up in."""
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
+        try:
+            import imageio_ffmpeg
+            ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+        except Exception:
+            ffmpeg = None
+    if not ffmpeg:
         log.warning("ffmpeg_missing", action="leaving mp4v output as-is",
                     hint="install ffmpeg for a browser-playable file")
         return False

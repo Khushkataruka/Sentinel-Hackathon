@@ -58,6 +58,7 @@ export const api = {
   evidence: (readId) => request(`/evidence/${readId}`),
   frames: (params) => request(`/frames${params}`),
   mediaUrl: (kind, ref) => `/media/${kind}/${ref}`,
+  sightings: (params = '') => request(`/sightings${params}`),
 
   // watchlist
   watchlist: () => request('/watchlist'),
@@ -67,5 +68,10 @@ export const api = {
   // admin, on the registry
   adapters: () => request('/adapters'),
   queueDepth: () => request('/queues/depth'),
-  camerasNeedingSurvey: () => request('/cameras/needing-survey')
+  camerasNeedingSurvey: () => request('/cameras/needing-survey'),
+  departments: () => request('/departments'),
+  onboardCamera: (cameraId, body) =>
+    request(`/cameras/${cameraId}`, { method: 'PUT', body: JSON.stringify(body) }),
+  surveyCamera: (cameraId, body) =>
+    request(`/cameras/${cameraId}/profile`, { method: 'PUT', body: JSON.stringify(body) })
 }

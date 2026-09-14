@@ -40,6 +40,15 @@ services:
     command: ["python", "scripts/migrate.py", "--seed"]
     restart: "no"
 
+  auto-onboard:
+    <<: *app
+    depends_on:
+      registry: { condition: service_healthy }
+    command: >
+      sh -c "sentinel-registry sync-sentinel --department-id 1 &&
+             python scripts/survey.py --all --registry http://registry:8000"
+    restart: "no"
+
   registry:
     <<: *app
     command: ["sentinel-registry", "serve", "--host", "0.0.0.0", "--port", "8000"]

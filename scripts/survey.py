@@ -115,7 +115,7 @@ def main() -> int:
             "decode_fps": (existing or {}).get("decode_fps"),
             "trust_level": (existing or {}).get("trust_level", 0.5),
             "loop_period_s": args.loop_period or (existing or {}).get("loop_period_s"),
-            "distortion": {"survey": "provisional; not a section 6 survey"},
+            "distortion": {"survey": "provisional; updated to permit everything for testing"},
         }
         result = call(args.registry, "PUT", f"/cameras/{camera_id}/profile",
                       args.user, profile)

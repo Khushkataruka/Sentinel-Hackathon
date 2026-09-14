@@ -86,6 +86,8 @@ class Settings(BaseSettings):
     plate_detect_model_path: Path = Path("./var/models/plate_detect.onnx")
     plate_ocr_model_path: Path = Path("./var/models/plate_ocr.onnx")
 
+    vllm_url: str = ""
+    vllm_model: str = "google/gemma-3-27b-it"
     #: Rider/helmet and phone detectors. Ultralytics .pt, run over the vehicle
     #: crop rather than the frame -- see pipelines/models/violations.py.
     helmet_model_path: Path = Path("./var/models/helmet_merged_yolo11m_best.pt")

@@ -102,8 +102,8 @@ async def route_detail(route_id: uuid.UUID, conn: DbConn, user: User):
     legs = await conn.fetch(
         """
         SELECT l.*,
-               fs.camera_id AS from_camera, fs.seen_at AS from_seen_at,
-               ts.camera_id AS to_camera,   ts.seen_at AS to_seen_at,
+               fs.camera_id AS from_camera, fs.seen_at AS from_seen_at, fs.crop_ref AS from_crop_ref,
+               ts.camera_id AS to_camera,   ts.seen_at AS to_seen_at, ts.crop_ref AS to_crop_ref,
                ST_Y(fc.location::geometry) AS from_lat,
                ST_X(fc.location::geometry) AS from_lon,
                ST_Y(tc.location::geometry) AS to_lat,

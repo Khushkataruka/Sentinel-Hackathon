@@ -20,6 +20,18 @@ export default function RoutePage() {
     [l.to_lat, l.to_lon]
   ])
 
+  const uniqueSightings = []
+  if (data.legs) {
+    data.legs.forEach(l => {
+      if (!uniqueSightings.find(s => s.read_id === l.from_read_id)) {
+        uniqueSightings.push({ read_id: l.from_read_id, camera: l.from_camera, time: l.from_seen_at, crop_ref: l.from_crop_ref })
+      }
+      if (!uniqueSightings.find(s => s.read_id === l.to_read_id)) {
+        uniqueSightings.push({ read_id: l.to_read_id, camera: l.to_camera, time: l.to_seen_at, crop_ref: l.to_crop_ref })
+      }
+    })
+  }
+
   return (
     <>
       <div className="panel row">
@@ -52,6 +64,25 @@ export default function RoutePage() {
             <CircleMarker key={i} center={p} radius={5} />
           ))}
         </MapContainer>
+      )}
+
+      {uniqueSightings.length > 0 && (
+        <div className="panel">
+          <strong>Vehicle Sightings</strong>
+          <div style={{ display: 'flex', overflowX: 'auto', gap: '10px', marginTop: '10px' }}>
+            {uniqueSightings.map(s => (
+              <div key={s.read_id} style={{ textAlign: 'center', minWidth: '150px' }}>
+                <img 
+                  src={`/media/${s.crop_ref}`} 
+                  alt={`Sighting at ${s.camera}`} 
+                  style={{ maxHeight: '150px', border: '1px solid #ccc', borderRadius: '4px', objectFit: 'contain' }} 
+                  onError={(e) => { e.target.style.display = 'none'; }}
+                />
+                <div className="muted" style={{ fontSize: '0.8em', marginTop: '4px' }}>{s.camera}</div>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       <div className="panel">
