@@ -3,6 +3,9 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# examples output
+example/anpr/output/*.png
+
 # C extensions
 *.so
 
